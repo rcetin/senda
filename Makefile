@@ -48,12 +48,12 @@ $(target): $($(target)_objs)
 	$(CC) $(CFLAGS) -o $(target) $($(target)_objs)
 
 post-target: $(target)
-	mkdir -p .objs
-	mv *.o *.d .objs
+	mkdir -p .build
+	mv *.o *.d $(target) .build
 
 include $($(target)_deps) # include all dep files in the makefile
 
 clean:
-	rm -rf .objs *d $(target) > /dev/null 2>&1
+	rm -rf .build *d $(target) > /dev/null 2>&1
 
 .PHONY: clean all
