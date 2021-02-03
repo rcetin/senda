@@ -1,7 +1,3 @@
-# %: wildcard
-# $(var:suffix=replacement) === $(patsubst %suffix,%replacement,$(var))
-# $(hello_src:.cpp=.o) -> this extracts hello.o from hello.cpp
-
 CC=gcc
 target = senda
 
@@ -19,7 +15,12 @@ CFLAGS = -std=gnu11 \
 	-pedantic \
 	-Wall \
 	-Wextra \
+	-Wfloat-equal \
+	-Wundef \
+	-Wshadow \
 	-Wcast-align \
+	-Wpointer-arith \
+	-Wstrict-prototypes \
 	-Wcast-qual \
 	-Wdisabled-optimization \
 	-Wformat=2 \
@@ -28,26 +29,18 @@ CFLAGS = -std=gnu11 \
 	-Wmissing-declarations \
 	-Wmissing-include-dirs \
 	-Wredundant-decls \
-	-Wshadow \
 	-Wsign-conversion \
 	-Wstrict-overflow=5 \
+	-Wconversion \
 	-Wswitch-default \
-	-Wundef \
 	-Werror \
 	-Wno-unused
 
 all: $(target) post-target
 
-# $(info $(target)_src: $($(target)_src))
-# $(info $(target)_objs: $($(target)_objs))
-# $(info $(target)_deps: $($(target)_deps))
-
-# rule to generate a dep file by using the C preprocessor
-# (see man cpp for details on the -MM and -MT options)
 %.d: %.c
 	@$(CC) $(CFLAGS) $< -MM -MT $(@:.d=.o) >$@
 
-# rule for generating obj files
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 

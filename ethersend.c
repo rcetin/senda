@@ -18,7 +18,7 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
     int sockfd;
 	struct ifreq if_idx;
 	struct ifreq if_mac;
-	uint32_t tx_len = 0;
+	uint64_t tx_len = 0;
 	char sendbuf[MAX_BUFFER_SIZE];
 	struct ether_header *eh = (struct ether_header *) sendbuf;
 	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
@@ -86,7 +86,7 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
 
 	/* Send packet */
     uint32_t cnt = 0;
-    ret = sendto(sockfd, sendbuf, tx_len, MSG_CONFIRM, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll));
+    ret = (int)sendto(sockfd, sendbuf, tx_len, MSG_CONFIRM, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll));
     if (ret == -1) {
         errorf("sendto error. errno: %d, strerr: %s", errno, strerror(errno));
         goto bail;

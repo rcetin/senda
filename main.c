@@ -43,8 +43,8 @@ int main(int argc, char *argv[])
     char ifname[IFNAMSIZ] = {0};
     uint8_t *data = NULL;
     uint32_t datalen = 0;
-    uint32_t count;
-    uint32_t interval_in_ms;
+    long int count;
+    long int interval_in_ms;
 
     if (argc < 2) {
         print_help();
