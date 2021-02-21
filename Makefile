@@ -31,7 +31,6 @@ CFLAGS = -std=gnu11 \
 	-Wredundant-decls \
 	-Wsign-conversion \
 	-Wstrict-overflow=5 \
-	-Wconversion \
 	-Wswitch-default \
 	-Werror \
 	-Wno-unused

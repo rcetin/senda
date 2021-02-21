@@ -14,6 +14,7 @@ enum debug_level {
 int get_debug_level(void);
 void set_debug_level(int level);
 int str2debug(const char *str);
+const char *debug2str(int level);
 void list_debug_levels(void);
 
 #define errorf(...)                                                         \

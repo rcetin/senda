@@ -13,7 +13,7 @@
 #include "debug/debug.h"
 #include "ethersend.h"
 
-int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t len)
+int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t len, packet_t ptype)
 {
     int sockfd;
 	struct ifreq if_idx;
@@ -67,7 +67,7 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
     printmac(eh->ether_dhost);
 
 	/* Ethertype field */
-	eh->ether_type = htons(ETH_P_ARP);
+	eh->ether_type = htons(packet2proto(ptype));
 	tx_len += sizeof(struct ether_header);
 
 	/* Packet data */

@@ -79,3 +79,33 @@ long long int gettime_ms(void)
 
     return ts.tv_sec * MSEC + ts.tv_nsec / USEC;
 }
+
+uint8_t *generate_rand_data(size_t size)
+{
+    static int seeded = 0;
+
+    if (!seeded) {
+        srand(time(NULL));
+        seeded = 1;
+    }
+
+    uint8_t *data = malloc(size);
+    if (!data) {
+        errorf("failed to allocate data for random");
+        return NULL;
+    }
+
+    for(size_t i = 0; i < size; ++i) {
+        data[i] = rand() % UINT8_MAX;
+        fprintf(stderr, "0x%2x ", data[i]);
+    }
+
+    infof("\nrandom data generated size: %lu", size);
+    return data;
+}
+
+unsigned int packet2proto(packet_t p)
+{
+    if (p == ARP) return ETH_P_ARP;
+    else return ETH_P_IP;
+}

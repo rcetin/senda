@@ -12,7 +12,8 @@
 #include "utils/utils.h"
 #include "ethersend.h"
 
-void print_help(void);
+static void print_help(void);
+static void show_current_opts(void);
 
 void print_help(void)
 {
@@ -22,17 +23,28 @@ void print_help(void)
             "-d, --dst [MAC]        Destination MAC\n"
             "-i, --if [ifname]      Interface name\n"
             "-b, --data [data]      Binary data\n"
+            "-r, --rand [bytes]     Random data with given size\n"
             "-c, --count [count]    Count to send a packet (optional, default infinite)\n"
             "-t, --interval [interval]  Packet interval (optional, default 1s)\n"
-            "-l, --log              set log level");
+            "-l, --log              set log level"
+            "-o, --opt              get current options");
+}
+
+void show_current_opts(void)
+{
+    fprintf(stderr, "senda - a network packet sender\n\n"
+    "Options:\n"
+    "log: %s\n", debug2str(get_debug_level()));
 }
 
 static struct option long_options[] = {
     {"dst",     required_argument, 0,  'd' },
     {"if",     required_argument, 0,  'i' },
     {"data",    required_argument, 0,  'b' },
+    {"rand",    required_argument, 0,  'r' },
     {"count",   required_argument, 0,  'c' },
     {"interval",  required_argument, 0, 't'},
+    {"opt",  no_argument, 0, 'o'},
     {0,         0,                 0,  0 }
 };
 
@@ -53,7 +65,7 @@ int main(int argc, char *argv[])
 
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "d:i:b:c:t:l:",
+        c = getopt_long(argc, argv, "d:i:b:r:c:t:l:o",
                 long_options, &option_index);
         if (c == -1)
             break;
@@ -78,6 +90,17 @@ int main(int argc, char *argv[])
             }
             break;
 
+        case 'r':
+            errno = 0;
+            datalen = strtol(optarg, NULL, 0);
+            if (errno) {
+                errorf("Failed to parse count\n");
+                goto bail;
+            }
+            data = generate_rand_data((size_t)datalen);
+            
+            break;
+
         case 'c':
             errno = 0;
             count = strtol(optarg, NULL, 0);
@@ -100,6 +123,11 @@ int main(int argc, char *argv[])
             set_debug_level(str2debug(optarg));
             break;
 
+        case 'o':
+            show_current_opts();
+            goto bail;
+            break;
+
         case '?':
             print_help();
             goto bail;
@@ -110,13 +138,18 @@ int main(int argc, char *argv[])
         }
     }    
     
+    if (data == NULL) {
+        errorf("Please, give binary data or random data");
+        goto bail;
+    }
+
     long long int ts_begin, ts_end;
     uint32_t cnt = 0;
     while (1)
     {
         ts_begin = gettime_ms();
         fprintf(stderr, "ts_begin: %llu\n", ts_begin);
-        if (send_raw_eth(ifname, dstmac, data, datalen)) {
+        if (send_raw_eth(ifname, dstmac, data, datalen, 1)) {
             errorf("failed to send raw eth packet");
             goto bail;
         }
@@ -131,5 +164,6 @@ int main(int argc, char *argv[])
     return 0;
 
 bail:
+    SFREE(data);
     return EXIT_FAILURE;
 }
