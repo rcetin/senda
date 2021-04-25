@@ -3,8 +3,10 @@
 #include <errno.h>
 #include <stdint.h>
 #include <time.h>
+#include <sys/ioctl.h>
 
 #include <netinet/ether.h>
+#include <net/if.h>
 
 #include "utils.h"
 #include "../debug/debug.h"
@@ -108,4 +110,35 @@ unsigned int packet2proto(packet_t p)
 {
     if (p == ARP) return ETH_P_ARP;
     else return ETH_P_IP;
+}
+
+
+int get_ifidx(int sockfd, struct ifreq *ifidx, const char *ifname)
+{
+    int ret;
+
+    /* Get the index of the interface to send on */
+	memset(ifidx, 0, sizeof(struct ifreq));
+	strncpy(ifidx->ifr_name, ifname, IFNAMSIZ - 1);
+    ret = ioctl(sockfd, SIOCGIFINDEX, ifidx);
+	if (ret == -1) {
+        errorf("ioctl SIOCGIFINDEX error. errno: %d, strerr: %s", errno, strerror(errno));
+    }
+
+    return ret;
+}
+
+int get_ifmac(int sockfd, struct ifreq *ifmac, const char *ifname)
+{
+    int ret;
+
+    /* Get the MAC address of the interface to send on */
+	memset(ifmac, 0, sizeof(struct ifreq));
+	strncpy(ifmac->ifr_name, ifname, IFNAMSIZ - 1);
+    ret = ioctl(sockfd, SIOCGIFHWADDR, ifmac);
+	if (ret == -1) {
+        errorf("ioctl SIOCGIFHWADDR error. errno: %d, strerr: %s", errno, strerror(errno));
+    }
+
+    return ret;
 }

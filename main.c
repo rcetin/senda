@@ -11,6 +11,7 @@
 #include "debug/debug.h"
 #include "utils/utils.h"
 #include "ethersend.h"
+#include "udpsend.h"
 
 static void print_help(void);
 static void show_current_opts(void);
@@ -46,6 +47,21 @@ static struct option long_options[] = {
     {"interval",  required_argument, 0, 't'},
     {"opt",  no_argument, 0, 'o'},
     {0,         0,                 0,  0 }
+};
+
+struct global_sender {
+    char name[16];
+    struct sender *handle;
+};
+
+enum sendertype {
+    UDP,
+    ETH,
+};
+
+struct global_sender sender_dispatcher[TOTAL_SENDER] = {
+    {.name = "udp", .handle = &udpsender},
+    {.name = "eth", .handle = &ethsender},
 };
 
 int main(int argc, char *argv[])
@@ -149,9 +165,14 @@ int main(int argc, char *argv[])
     {
         ts_begin = gettime_ms();
         fprintf(stderr, "ts_begin: %llu\n", ts_begin);
-        if (send_raw_eth(ifname, dstmac, data, datalen, 1)) {
+        struct ethctx ectx = {.ifname = ifname, .dstmac = dstmac, .ptype = 1};
+        if (sender_dispatcher[ETH].handle->send(&ectx, data, datalen)) {
             errorf("failed to send raw eth packet");
             goto bail;
+        }
+        struct udpaddr uctx = {.ip = "192.168.2.1", .port = 11221};
+        if (sender_dispatcher[UDP].handle->send(&uctx, data, datalen)) {
+            errorf("SEND UDP FAIL");
         }
         ts_end = gettime_ms();
         fprintf(stderr, "ts_end: %llu\n", ts_end);
@@ -159,7 +180,6 @@ int main(int argc, char *argv[])
 
         sleep(1);
     }
-    
 
     return 0;
 

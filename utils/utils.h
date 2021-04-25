@@ -27,6 +27,8 @@ typedef enum {
     ARP,
 } packet_t;
 
+struct ifreq;
+
 uint8_t *str2hex(char*, uint32_t*);
 int str2mac(const char*, uint8_t*);
 int mac2str(const uint8_t*, char*);
@@ -35,6 +37,9 @@ long long int gettime_ms(void);
 uint8_t *generate_rand_data(size_t);
 
 void printmac(uint8_t *mac);
+
+int get_ifidx(int sockfd, struct ifreq *ifidx, const char *ifname);
+int get_ifmac(int sockfd, struct ifreq *ifmac, const char *ifname);
 
 #endif
 

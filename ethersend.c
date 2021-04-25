@@ -12,8 +12,25 @@
 #include "utils/utils.h"
 #include "debug/debug.h"
 #include "ethersend.h"
+#include "main.h"
 
-int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t len, packet_t ptype)
+void eth_create(void)
+{
+
+}
+
+static int eth_open(void)
+{
+    int sockfd;
+    /* Open RAW socket to send on */
+    sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+    if (sockfd == -1) {
+        errorf("socket failed. errno: %d, strerr: %s", errno, strerror(errno));
+    }
+    return sockfd;
+}
+
+int eth_send(void *ctx, uint8_t *data, uint32_t len)
 {
     int sockfd;
 	struct ifreq if_idx;
@@ -23,37 +40,29 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
 	struct ether_header *eh = (struct ether_header *) sendbuf;
 	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
 	struct sockaddr_ll socket_address;
+    struct ethctx *ectx = (struct ethctx *)ctx;
     int ret = -1;
 
-    debugf("Send raw eth packet to: "ETHER_STR", from %s", ETHER_ADDR(dstmac), ifname);
+    debugf("Send raw eth packet to: "ETHER_STR", from %s", ETHER_ADDR(ectx->dstmac), ectx->ifname);
     printf("Data: ");
     for (uint32_t i = 0; i < len; ++i) {
         printf("0x%02x ", data[i]);
     }
     printf("\n");
 
-	/* Open RAW socket to send on */
-    sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
-    if (sockfd == -1) {
-        errorf("socket failed. errno: %d, strerr: %s", errno, strerror(errno));
-        return ret;
+	sockfd = eth_open();
+    if (sockfd < 0) {
+        errorf("socket open failed");
+        return -1;
     }
 
-	/* Get the index of the interface to send on */
-	memset(&if_idx, 0, sizeof(struct ifreq));
-	strncpy(if_idx.ifr_name, ifname, IFNAMSIZ - 1);
-    ret = ioctl(sockfd, SIOCGIFINDEX, &if_idx);
-	if (ret == -1) {
-        errorf("ioctl SIOCGIFINDEX error. errno: %d, strerr: %s", errno, strerror(errno));
+    ret = get_ifidx(sockfd, &if_idx, ectx->ifname);
+    if (ret) {
         goto bail;
     }
 
-	/* Get the MAC address of the interface to send on */
-	memset(&if_mac, 0, sizeof(struct ifreq));
-	strncpy(if_mac.ifr_name, ifname, IFNAMSIZ - 1);
-    ret = ioctl(sockfd, SIOCGIFHWADDR, &if_mac);
-	if (ret == -1) {
-        errorf("ioctl SIOCGIFHWADDR error. errno: %d, strerr: %s", errno, strerror(errno));
+    ret = get_ifmac(sockfd, &if_mac, ectx->ifname);
+    if (ret) {
         goto bail;
     }
 
@@ -62,12 +71,12 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
 
 	/* Ethernet header */
     memcpy(eh->ether_shost, if_mac.ifr_hwaddr.sa_data, ETH_ALEN);
-    memcpy(eh->ether_dhost, dstmac, ETH_ALEN);
+    memcpy(eh->ether_dhost, ectx->dstmac, ETH_ALEN);
     printmac(eh->ether_shost);
     printmac(eh->ether_dhost);
 
 	/* Ethertype field */
-	eh->ether_type = htons(packet2proto(ptype));
+	eh->ether_type = htons(packet2proto(ectx->ptype));
 	tx_len += sizeof(struct ether_header);
 
 	/* Packet data */
@@ -81,7 +90,7 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
 	/* Address length*/
 	socket_address.sll_halen = ETH_ALEN;
 	/* Destination MAC */
-    memcpy(socket_address.sll_addr, dstmac, ETH_ALEN);
+    memcpy(socket_address.sll_addr, ectx->dstmac, ETH_ALEN);
     printmac(socket_address.sll_addr);
 
 	/* Send packet */
@@ -92,10 +101,15 @@ int send_raw_eth(const char *ifname, uint8_t *dstmac, uint8_t *data, uint32_t le
         goto bail;
     }
 
-    debugf("sendto succeed. Send %u bytes to "ETHER_STR" from: %s", ret, ETHER_ADDR(dstmac), ifname);
+    debugf("sendto succeed. Send %u bytes to "ETHER_STR" from: %s", ret, ETHER_ADDR(ectx->dstmac), ectx->ifname);
 
     ret = 0;
 bail:
     close(sockfd);
     return ret;
 }
+
+struct sender ethsender = {
+    .create = eth_create,
+    .send = eth_send,
+};

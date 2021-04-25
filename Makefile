@@ -4,7 +4,8 @@ target = senda
 $(target)_src = main.c \
 				ethersend.c \
 				debug/debug.c \
-				utils/utils.c
+				utils/utils.c \
+				udpsend.c
 
 $(target)_objs = $($(target)_src:.c=.o)
 
