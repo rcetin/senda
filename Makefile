@@ -2,10 +2,13 @@ CC=gcc
 target = senda
 
 $(target)_src = main.c \
-				ethersend.c \
+				eth/ethersend.c \
 				debug/debug.c \
 				utils/utils.c \
-				udpsend.c
+				udp/udpsend.c \
+				tcp/tcpsend.c
+
+$(target)_inc = -I$(shell pwd)
 
 $(target)_objs = $($(target)_src:.c=.o)
 
@@ -39,17 +42,18 @@ CFLAGS = -std=gnu11 \
 all: $(target) post-target
 
 %.d: %.c
-	@$(CC) $(CFLAGS) $< -MM -MT $(@:.d=.o) >$@
+	@$(CC) $(CFLAGS) $($(target)_inc) $< -MM -MT $(@:.d=.o) >$@
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $($(target)_inc) -c $< -o $@
 
 $(target): $($(target)_objs)
 	$(CC) $(CFLAGS) -o $(target) $($(target)_objs)
 
 post-target: $(target)
 	mkdir -p .build
-	mv *.o *.d $(target) .build
+	find . -name '*.d' -exec mv -v {} .build \;
+	find . -name '*.o' -exec mv -v {} .build \;
 
 include $($(target)_deps) # include all dep files in the makefile
 

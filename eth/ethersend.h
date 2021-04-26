@@ -9,8 +9,8 @@ struct ethctx {
     packet_t ptype;
 };
 
-void eth_create(void);
-int eth_send(void *ctx, uint8_t *data, uint32_t len);
-
+int eth_create(void);
+int eth_send(int handle, void *ctx, uint8_t *data, uint32_t len);
+void eth_destroy(int handle);
 
 #endif

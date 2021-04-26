@@ -14,11 +14,6 @@
 #include "ethersend.h"
 #include "main.h"
 
-void eth_create(void)
-{
-
-}
-
 static int eth_open(void)
 {
     int sockfd;
@@ -30,9 +25,20 @@ static int eth_open(void)
     return sockfd;
 }
 
-int eth_send(void *ctx, uint8_t *data, uint32_t len)
+int eth_create(void)
 {
-    int sockfd;
+	int sockfd = eth_open();
+    if (sockfd < 0) {
+        errorf("socket open failed");
+        return -1;
+    }
+
+    return sockfd;
+}
+
+int eth_send(int handle, void *ctx, uint8_t *data, uint32_t len)
+{
+    int sockfd = handle;
 	struct ifreq if_idx;
 	struct ifreq if_mac;
 	uint64_t tx_len = 0;
@@ -49,12 +55,6 @@ int eth_send(void *ctx, uint8_t *data, uint32_t len)
         printf("0x%02x ", data[i]);
     }
     printf("\n");
-
-	sockfd = eth_open();
-    if (sockfd < 0) {
-        errorf("socket open failed");
-        return -1;
-    }
 
     ret = get_ifidx(sockfd, &if_idx, ectx->ifname);
     if (ret) {
@@ -105,11 +105,17 @@ int eth_send(void *ctx, uint8_t *data, uint32_t len)
 
     ret = 0;
 bail:
-    close(sockfd);
     return ret;
+}
+
+void eth_destroy(int handle)
+{
+    int sockfd = handle;
+    close(sockfd);
 }
 
 struct sender ethsender = {
     .create = eth_create,
     .send = eth_send,
+    .destroy = eth_destroy,
 };
