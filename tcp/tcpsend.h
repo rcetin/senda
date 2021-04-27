@@ -3,15 +3,15 @@
 
 #include <stdint.h>
 
-struct tcpaddr {
+typedef struct tcpaddr {
     char ip[16];
     int port;
-};
+} tcpaddr_t;
 
 struct sender tcpsender;
 
-int tcp_create(void);
-int tcp_send(int handle, void *ctx, uint8_t *data, uint32_t len);
-void tcp_destroy(int handle);
+void *tcp_create(void *ctx);
+int tcp_send(void *priv, uint8_t *data, uint32_t len);
+void tcp_destroy(void *priv);
 
 #endif

@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -14,6 +15,11 @@
 #include "ethersend.h"
 #include "main.h"
 
+typedef struct eth_priv {
+    int handle;
+    ethctx_t ctx;
+} eth_priv;
+
 static int eth_open(void)
 {
     int sockfd;
@@ -25,20 +31,35 @@ static int eth_open(void)
     return sockfd;
 }
 
-int eth_create(void)
+void *eth_create(void *ctx)
 {
+    ethctx_t *ectx = ctx;
+    eth_priv *private = NULL;
+
 	int sockfd = eth_open();
     if (sockfd < 0) {
         errorf("socket open failed");
-        return -1;
+        return NULL;
     }
 
-    return sockfd;
+    private = calloc(1, sizeof(*private));
+    if (!private) {
+        errorf("no memory for eth handle");
+        return NULL;
+    }
+
+    private->handle = sockfd;
+    memcpy(private->ctx.ifname, ectx->ifname, IFNAMSIZ);
+    memcpy(private->ctx.dstmac, ectx->dstmac, ETH_ALEN);
+    private->ctx.ptype = ectx->ptype;
+
+    return private;
 }
 
-int eth_send(int handle, void *ctx, uint8_t *data, uint32_t len)
+int eth_send(void *priv, uint8_t *data, uint32_t len)
 {
-    int sockfd = handle;
+    eth_priv *private = priv;
+    int sockfd = private->handle;
 	struct ifreq if_idx;
 	struct ifreq if_mac;
 	uint64_t tx_len = 0;
@@ -46,7 +67,7 @@ int eth_send(int handle, void *ctx, uint8_t *data, uint32_t len)
 	struct ether_header *eh = (struct ether_header *) sendbuf;
 	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
 	struct sockaddr_ll socket_address;
-    struct ethctx *ectx = (struct ethctx *)ctx;
+    struct ethctx *ectx = &private->ctx;
     int ret = -1;
 
     debugf("Send raw eth packet to: "ETHER_STR", from %s", ETHER_ADDR(ectx->dstmac), ectx->ifname);
@@ -108,10 +129,11 @@ bail:
     return ret;
 }
 
-void eth_destroy(int handle)
+void eth_destroy(void *priv)
 {
-    int sockfd = handle;
-    close(sockfd);
+    eth_priv *private = priv;
+    close(private->handle);
+    SFREE(priv);
 }
 
 struct sender ethsender = {

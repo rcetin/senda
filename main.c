@@ -165,27 +165,47 @@ int main(int argc, char *argv[])
 
     long long int ts_begin, ts_end;
     uint32_t cnt = 0;
-    int eth_handle = sender_dispatcher[ETH].worker->create();
-    int udp_handle = sender_dispatcher[UDP].worker->create();
-    int tcp_handle = sender_dispatcher[TCP].worker->create();
+
+    ethctx_t ectx = {.ptype = 1};
+    memcpy(ectx.ifname, ifname, IFNAMSIZ);
+    memcpy(ectx.dstmac, dstmac, ETH_ALEN);
+    void *ethhandle = sender_dispatcher[ETH].worker->create(&ectx);
+    if (!ethhandle) {
+        errorf("ETH Handle NULL, exit");
+        goto bail;
+    }
+
+    udpaddr_t uctx = {.port = 11221};
+    snprintf(uctx.ip, MAX_IP_STR_SIZE, "192.168.2.1");
+    void *udphandle = sender_dispatcher[UDP].worker->create(&uctx);
+    if (!udphandle) {
+        errorf("UDP Handle NULL, exit");
+        goto bail;
+    }
+
+    tcpaddr_t tctx = {.port = 3333};
+    snprintf(tctx.ip, MAX_IP_STR_SIZE, "0.0.0.0");
+    void *tcphandle = sender_dispatcher[TCP].worker->create(&tctx);
+    if (!tcphandle) {
+        errorf("TCP Handle NULL, exit");
+        goto bail;
+    }
+
     while (1)
     {
         ts_begin = gettime_ms();
         fprintf(stderr, "ts_begin: %llu\n", ts_begin);
-        struct ethctx ectx = {.ifname = ifname, .dstmac = dstmac, .ptype = 1};
         
-        if (sender_dispatcher[ETH].worker->send(eth_handle, &ectx, data, datalen)) {
+        if (sender_dispatcher[ETH].worker->send(ethhandle, data, datalen)) {
             errorf("failed to send raw eth packet");
             goto bail;
         }
 
-        struct udpaddr uctx = {.ip = "192.168.2.1", .port = 11221};
-        if (sender_dispatcher[UDP].worker->send(udp_handle, &uctx, data, datalen)) {
+        if (sender_dispatcher[UDP].worker->send(udphandle, data, datalen)) {
             errorf("SEND UDP FAIL");
         }
 
-        struct tcpaddr tctx = {.ip = "0.0.0.0", .port = 3333};
-        if (sender_dispatcher[TCP].worker->send(tcp_handle, &tctx, data, datalen)) {
+        if (sender_dispatcher[TCP].worker->send(tcphandle, data, datalen)) {
             errorf("SEND TCP FAIL");
         }
 
@@ -193,20 +213,15 @@ int main(int argc, char *argv[])
         fprintf(stderr, "ts_end: %llu\n", ts_end);
         fprintf(stderr, "delta: %llu ms, cnt: %u\n\n", ts_end - ts_begin, ++cnt);
 
-        sleep(1);
+        usleep(interval_in_ms * MSEC);
     }
 
-    sender_dispatcher[ETH].worker->destroy(eth_handle);
-    sender_dispatcher[UDP].worker->destroy(udp_handle);
-    sender_dispatcher[TCP].worker->destroy(tcp_handle);
+    sender_dispatcher[ETH].worker->destroy(ethhandle);
+    sender_dispatcher[UDP].worker->destroy(udphandle);
+    sender_dispatcher[TCP].worker->destroy(tcphandle);
 
     return 0;
 bail:
     SFREE(data);
     return EXIT_FAILURE;
 }
-
-/* @TODO
-    1- Take a ctx as an argument to create fnx.
-    2- 
-*/

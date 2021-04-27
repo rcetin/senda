@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "utils/utils.h"
 #include "debug/debug.h"
@@ -12,8 +13,8 @@
 
 typedef struct udp_priv {
     int handle;
-    udpaddr addr;
-} udp_priv;
+    udpaddr_t addr;
+} udp_priv_t;
 
 static int udp_open(void)
 {
@@ -27,8 +28,8 @@ static int udp_open(void)
 
 void *udp_create(void *ctx)
 {
-    udpaddr *addr = ctx;
-    udp_priv *private = NULL;
+    udpaddr_t *addr = ctx;
+    udp_priv_t *private = NULL;
     
     int fd = udp_open();
     if (fd == -1) {
@@ -51,11 +52,11 @@ void *udp_create(void *ctx)
 
 int udp_send(void *priv, uint8_t *data, uint32_t len)
 {
-    udp_priv *private = priv;
+    udp_priv_t *private = priv;
     int sockfd = private->handle;
     struct sockaddr_in si;
     int ret = 0;
-    udpaddr *udpa = &private->addr;
+    udpaddr_t *udpa = &private->addr;
 
     errorf("ENTER");
 
@@ -83,7 +84,7 @@ bail:
 
 void udp_destroy(void *priv)
 {
-    udp_priv *private = priv;
+    udp_priv_t *private = priv;
     close(private->handle);
     SFREE(priv);
 }
