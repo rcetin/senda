@@ -142,3 +142,11 @@ int get_ifmac(int sockfd, struct ifreq *ifmac, const char *ifname)
 
     return ret;
 }
+
+void dump_bytes_hex(uint8_t *data, uint32_t len)
+{
+    for (uint32_t i = 0; i < len; ++i) {
+        fprintf(stderr, "0x%02x ", data[i]);
+    }
+    fprintf(stderr, "\n");
+}

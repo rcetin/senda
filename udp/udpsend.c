@@ -13,39 +13,36 @@
 
 typedef struct udp_priv {
     int handle;
-    udpaddr_t addr;
+    udpctx_t addr;
 } udp_priv_t;
 
 static int udp_open(void)
 {
-    int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sockfd == -1) {
-        errorf("udp socket open error");
-    }
-
-    return sockfd;
+    return socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 }
 
 void *udp_create(void *ctx)
 {
-    udpaddr_t *addr = ctx;
+    udpctx_t *addr = ctx;
     udp_priv_t *private = NULL;
     
     int fd = udp_open();
     if (fd == -1) {
+        errorf("[UDP] socket open error");
         return NULL;
     }
 
     private = calloc(1, sizeof(*private));
     if (!private) {
-        errorf("no memory for udp handle");
+        errorf("[UDP] no memory for handle");
         return NULL;
     }
 
-    errorf("sock success. fd: %u", fd);
     private->handle = fd;
     memcpy(private->addr.ip, addr->ip, sizeof(private->addr.ip));
     private->addr.port = addr->port;
+
+    infof("[UDP] handle created successfully. fd: %u", fd);
 
     return private;
 }
@@ -56,29 +53,29 @@ int udp_send(void *priv, uint8_t *data, uint32_t len)
     int sockfd = private->handle;
     struct sockaddr_in si;
     int ret = 0;
-    udpaddr_t *udpa = &private->addr;
+    udpctx_t *udpctx = &private->addr;
 
-    errorf("ENTER");
+    debugf("[UDP] ENTER");
 
     memset((char *) &si, 0, sizeof(si));
 	si.sin_family = AF_INET;
-	si.sin_port = htons(udpa->port);
+	si.sin_port = htons(udpctx->port);
 	
-    if (inet_aton(udpa->ip, &si.sin_addr) == 0) {
-        errorf("invalid ip addr");
+    if (inet_aton(udpctx->ip, &si.sin_addr) == 0) {
+        errorf("[UDP] invalid ip addr");
         goto bail;
     }
 
     ret = sendto(sockfd, data, len, 0, (struct sockaddr *) &si, sizeof(si));
     if (ret == -1) {
-        errorf("sendto error. errno: %d, strerr: %s", errno, strerror(errno));
+        errorf("[UDP] sendto error. errno: %d, strerr: %s", errno, strerror(errno));
         goto bail;
     }
 
+    debugf("[UDP] send success. Send %u bytes", ret);
     ret = 0;
-    errorf("UDP send success ret: %d", ret);
 bail:
-    errorf("UDP send exiting ret: %d", ret);
+    errorf("[UDP] Returning ret: %d", ret);
     return ret;
 }
 

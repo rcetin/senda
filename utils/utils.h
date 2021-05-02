@@ -17,6 +17,18 @@
 #define SFREE(p)    do{ if (p != NULL) {free(p); p = NULL;} }while(0);
 #endif
 
+#ifndef CHECK_BIT
+#define CHECK_BIT(val, mask)    !!(val & mask)
+#endif
+
+#ifndef SET_BIT
+#define SET_BIT(val, mask)    (val |= mask)
+#endif
+
+#ifndef RESET_BIT
+#define RESET_BIT(val, mask)    (val &= ~mask)
+#endif
+
 #define BASE_16 16
 #define MAX_BUFFER_SIZE   1024
 #define MAX_IP_STR_SIZE   16
@@ -38,6 +50,7 @@ long long int gettime_ms(void);
 uint8_t *generate_rand_data(size_t);
 
 void printmac(uint8_t *mac);
+void dump_bytes_hex(uint8_t *data, uint32_t len);
 
 int get_ifidx(int sockfd, struct ifreq *ifidx, const char *ifname);
 int get_ifmac(int sockfd, struct ifreq *ifmac, const char *ifname);

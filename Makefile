@@ -6,7 +6,9 @@ $(target)_src = main.c \
 				debug/debug.c \
 				utils/utils.c \
 				udp/udpsend.c \
-				tcp/tcpsend.c
+				tcp/tcpsend.c \
+				config/config.c \
+				config/json/json_parser.c
 
 $(target)_inc = -I$(shell pwd)
 

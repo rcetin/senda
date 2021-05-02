@@ -13,41 +13,39 @@
 #include "debug/debug.h"
 #include "utils/utils.h"
 
+#include "tcppriv.h"
+
 typedef struct tcp_priv {
     int handle;
-    tcpaddr_t addr;
+    uint32_t flags;
+    tcpctx_t addr;
 } tcp_priv_t;
+
+struct sigaction sigpipe_action = {.sa_handler = SIG_IGN};
 
 static int tcp_open(void)
 {
-    int sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (sockfd == -1) {
-        errorf("tcp socket open error");
-    }
-
-    return sockfd;
+    return socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 }
 
 static int tcp_connect(tcp_priv_t *priv)
 {
     struct sockaddr_in si;
-    tcpaddr_t *tcpa = &priv->addr;
+    tcpctx_t *tcpx = &priv->addr;
     int ret = 0;
 
     memset((char *) &si, 0, sizeof(si));
 	si.sin_family = AF_INET;
-	si.sin_port = htons(tcpa->port);
+	si.sin_port = htons(tcpx->port);
 	
-    printf("TCP1\n");
-    if (inet_aton(tcpa->ip, &si.sin_addr) == 0) {
-        errorf("invalid ip addr");
+    if (inet_aton(tcpx->ip, &si.sin_addr) == 0) {
+        errorf("[TCP] invalid ip addr");
         ret = -1;
         goto bail;
     }
 
-    if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0)
-	{
-		errorf("TCP connect error");
+    if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0) {
+		errorf("[TCP] connect error");
         ret = -1;
 		goto bail;
 	}
@@ -58,37 +56,65 @@ bail:
 
 void *tcp_create(void *ctx)
 {
-    tcpaddr_t *addr = ctx;
+    tcpctx_t *addr = ctx;
     tcp_priv_t *private = NULL;
 
     int fd = tcp_open();
     if (fd == -1) {
+        errorf("[TCP] socket open error");
         return NULL;
     }
 
     private = calloc(1, sizeof(*private));
     if (!private) {
-        errorf("no memory for tcp handle");
+        errorf("[TCP] no memory for tcp handle");
         return NULL;
     }
 
-    errorf("sock success. fd: %u", fd);
     private->handle = fd;
     memcpy(private->addr.ip, addr->ip, sizeof(private->addr.ip));
     private->addr.port = addr->port;
 
     // Set a signal handler for SIGPIPE
-    
+    if (sigaction(SIGPIPE, &sigpipe_action, NULL)) {
+        errorf("[TCP] Sigpipe handler set is failed");
+        goto bail;
+    }
 
     if (tcp_connect(private)) {
         goto bail;
     }
 
+    infof("[TCP] handle created successfully. fd: %u", fd);
     return private;
-
 bail:
     SFREE(private);
     return NULL;
+}
+
+static int tcp_handle_brokenpipe(void *priv)
+{
+    tcp_priv_t *private = priv;
+    int ret;
+
+    close(private->handle);
+
+    int fd = tcp_open();
+    if (fd == -1) {
+        errorf("[TCP][Broken Pipe] TCP socket open is failed again.");
+        return -1;
+    }
+
+    private->handle = fd;
+    ret = tcp_connect(private);
+    if (ret) {
+        errorf("[TCP][Broken Pipe] Reconnection is failed.");
+        return -1;
+    }
+
+    infof("[TCP] Reconnection is successful. Starting to TCP send again.");
+    RESET_BIT(private->flags, TCP_FLAGS_BROKEN_PIPE);
+    return 0;
 }
 
 int tcp_send(void *priv, uint8_t *data, uint32_t len)
@@ -97,26 +123,33 @@ int tcp_send(void *priv, uint8_t *data, uint32_t len)
     int sockfd = private->handle;
     struct sockaddr_in si;
     int ret = 0;
-    struct tcpaddr *tcpa = &private->addr;
+    struct tcpctx *tcpx = &private->addr;
 
-    errorf("ENTER");
+    debugf("[TCP] ENTER");
 
-    memset((char *) &si, 0, sizeof(si));
-	si.sin_family = AF_INET;
-	si.sin_port = htons(tcpa->port);
-
-    printf("TCP2\n");
-    ret = sendto(sockfd, data, len, 0, (struct sockaddr *) &si, sizeof(si));
-    if (ret == -1) {
-        errorf("sendto error. errno: %d, strerr: %s", errno, strerror(errno));
+    if (CHECK_BIT(private->flags, TCP_FLAGS_BROKEN_PIPE) &&
+        tcp_handle_brokenpipe(private)) {
         goto bail;
     }
 
-    printf("TCP3\n");
+    memset((char *) &si, 0, sizeof(si));
+	si.sin_family = AF_INET;
+	si.sin_port = htons(tcpx->port);
+
+    ret = sendto(sockfd, data, len, 0, (struct sockaddr *) &si, sizeof(si));
+    if (ret == -1) {
+        if (errno == EPIPE && !CHECK_BIT(private->flags, TCP_FLAGS_BROKEN_PIPE)) {
+            debugf("[TCP] Setting TCP Broken Pipe flag");
+            SET_BIT(private->flags, TCP_FLAGS_BROKEN_PIPE);
+        }
+        errorf("[TCP] Sendto error. errno: %d, strerr: %s", errno, strerror(errno));
+        goto bail;
+    }
+
+    debugf("[TCP] send success. Send %u bytes", ret);
     ret = 0;
-    errorf("TCP send success ret: %d", ret);
 bail:
-    errorf("TCP send exiting ret: %d", ret);
+    debugf("[TCP] Returning ret: %d", ret);
     return ret;
 }
 

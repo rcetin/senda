@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <errno.h>
 #include <unistd.h>
+#include <json-c/json.h>
+#include <limits.h>
 
 #include <net/if.h>
 
@@ -13,6 +15,7 @@
 #include "eth/ethersend.h"
 #include "udp/udpsend.h"
 #include "tcp/tcpsend.h"
+#include "config/config.h"
 
 static void print_help(void);
 static void show_current_opts(void);
@@ -55,13 +58,6 @@ struct global_sender {
     struct sender *worker;
 };
 
-enum sendertype {
-    UDP,
-    ETH,
-    TCP,
-    TOTAL_SENDER,
-};
-
 struct global_sender sender_dispatcher[TOTAL_SENDER] = {
     {.name = "udp", .worker = &udpsender},
     {.name = "eth", .worker = &ethsender},
@@ -73,6 +69,7 @@ int main(int argc, char *argv[])
     int c;
     unsigned char dstmac[ETH_ALEN];
     char ifname[IFNAMSIZ] = {0};
+    char cfg_filename[PATH_MAX] = {0};
     uint8_t *data = NULL;
     uint32_t datalen = 0;
     long int count;
@@ -85,7 +82,7 @@ int main(int argc, char *argv[])
 
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "d:i:b:r:c:t:l:o",
+        c = getopt_long(argc, argv, "d:i:b:r:c:t:l:of:",
                 long_options, &option_index);
         if (c == -1)
             break;
@@ -148,6 +145,10 @@ int main(int argc, char *argv[])
             goto bail;
             break;
 
+        case 'f':
+            strcpy(cfg_filename, optarg);
+            break;
+
         case '?':
             print_help();
             goto bail;
@@ -166,6 +167,12 @@ int main(int argc, char *argv[])
     long long int ts_begin, ts_end;
     uint32_t cnt = 0;
 
+    if (config_init(cfg_filename, "json")) {
+        errorf("config initialization failed");
+        goto bail;
+    }
+
+    config_get_stream(NULL, TCP, NULL);
     ethctx_t ectx = {.ptype = 1};
     memcpy(ectx.ifname, ifname, IFNAMSIZ);
     memcpy(ectx.dstmac, dstmac, ETH_ALEN);
@@ -175,7 +182,7 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    udpaddr_t uctx = {.port = 11221};
+    udpctx_t uctx = {.port = 11221};
     snprintf(uctx.ip, MAX_IP_STR_SIZE, "192.168.2.1");
     void *udphandle = sender_dispatcher[UDP].worker->create(&uctx);
     if (!udphandle) {
@@ -183,7 +190,7 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    tcpaddr_t tctx = {.port = 3333};
+    tcpctx_t tctx = {.port = 3333};
     snprintf(tctx.ip, MAX_IP_STR_SIZE, "0.0.0.0");
     void *tcphandle = sender_dispatcher[TCP].worker->create(&tctx);
     if (!tcphandle) {
@@ -196,6 +203,9 @@ int main(int argc, char *argv[])
         ts_begin = gettime_ms();
         fprintf(stderr, "ts_begin: %llu\n", ts_begin);
         
+        fprintf(stderr, "Sending data: ");
+        dump_bytes_hex(data, datalen);
+
         if (sender_dispatcher[ETH].worker->send(ethhandle, data, datalen)) {
             errorf("failed to send raw eth packet");
             goto bail;

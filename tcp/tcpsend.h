@@ -3,10 +3,10 @@
 
 #include <stdint.h>
 
-typedef struct tcpaddr {
+typedef struct tcpctx {
     char ip[16];
     int port;
-} tcpaddr_t;
+} tcpctx_t;
 
 struct sender tcpsender;
 

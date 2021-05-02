@@ -22,13 +22,7 @@ typedef struct eth_priv {
 
 static int eth_open(void)
 {
-    int sockfd;
-    /* Open RAW socket to send on */
-    sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
-    if (sockfd == -1) {
-        errorf("socket failed. errno: %d, strerr: %s", errno, strerror(errno));
-    }
-    return sockfd;
+    return socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
 }
 
 void *eth_create(void *ctx)
@@ -38,13 +32,13 @@ void *eth_create(void *ctx)
 
 	int sockfd = eth_open();
     if (sockfd < 0) {
-        errorf("socket open failed");
+        errorf("[ETH] socket open failed");
         return NULL;
     }
 
     private = calloc(1, sizeof(*private));
     if (!private) {
-        errorf("no memory for eth handle");
+        errorf("[ETH] no memory for handle");
         return NULL;
     }
 
@@ -70,12 +64,7 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
     struct ethctx *ectx = &private->ctx;
     int ret = -1;
 
-    debugf("Send raw eth packet to: "ETHER_STR", from %s", ETHER_ADDR(ectx->dstmac), ectx->ifname);
-    printf("Data: ");
-    for (uint32_t i = 0; i < len; ++i) {
-        printf("0x%02x ", data[i]);
-    }
-    printf("\n");
+    debugf("[ETH] ENTER");
 
     ret = get_ifidx(sockfd, &if_idx, ectx->ifname);
     if (ret) {
@@ -106,11 +95,8 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
 
     memset(&socket_address, 0, sizeof(socket_address));
     socket_address.sll_family = AF_PACKET;
-	/* Index of the network device */
 	socket_address.sll_ifindex = if_idx.ifr_ifindex;
-	/* Address length*/
 	socket_address.sll_halen = ETH_ALEN;
-	/* Destination MAC */
     memcpy(socket_address.sll_addr, ectx->dstmac, ETH_ALEN);
     printmac(socket_address.sll_addr);
 
@@ -118,14 +104,14 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
     uint32_t cnt = 0;
     ret = (int)sendto(sockfd, sendbuf, tx_len, MSG_CONFIRM, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll));
     if (ret == -1) {
-        errorf("sendto error. errno: %d, strerr: %s", errno, strerror(errno));
+        errorf("[ETH] sendto error. errno: %d, strerr: %s", errno, strerror(errno));
         goto bail;
     }
 
-    debugf("sendto succeed. Send %u bytes to "ETHER_STR" from: %s", ret, ETHER_ADDR(ectx->dstmac), ectx->ifname);
-
+    debugf("[ETH] send success. Send %u bytes to "ETHER_STR" from: %s", ret, ETHER_ADDR(ectx->dstmac), ectx->ifname);
     ret = 0;
 bail:
+    debugf("[ETH] Returning, ret: %d", ret);
     return ret;
 }
 
