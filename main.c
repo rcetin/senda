@@ -74,6 +74,7 @@ int main(int argc, char *argv[])
     uint32_t datalen = 0;
     long int count;
     long int interval_in_ms;
+    int ret = EXIT_FAILURE;
 
     if (argc < 2) {
         print_help();
@@ -172,7 +173,11 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    config_get_stream(NULL, TCP, NULL);
+    fprintf(stderr, "TOTA=%d", TOTA);
+    int tcp_stream_size;
+    config_t tcpcfg;
+    config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
+
     ethctx_t ectx = {.ptype = 1};
     memcpy(ectx.ifname, ifname, IFNAMSIZ);
     memcpy(ectx.dstmac, dstmac, ETH_ALEN);
@@ -226,12 +231,13 @@ int main(int argc, char *argv[])
         usleep(interval_in_ms * MSEC);
     }
 
+
+    ret = EXIT_SUCCESS;
+bail:
+    SFREE(data);
     sender_dispatcher[ETH].worker->destroy(ethhandle);
     sender_dispatcher[UDP].worker->destroy(udphandle);
     sender_dispatcher[TCP].worker->destroy(tcphandle);
 
-    return 0;
-bail:
-    SFREE(data);
-    return EXIT_FAILURE;
+    return ret;
 }

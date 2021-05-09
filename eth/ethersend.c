@@ -118,6 +118,11 @@ bail:
 void eth_destroy(void *priv)
 {
     eth_priv *private = priv;
+
+    if (!private) {
+        return;
+    }
+
     close(private->handle);
     SFREE(priv);
 }

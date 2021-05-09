@@ -6,13 +6,11 @@
 #include "debug/debug.h"
 #include "json/json_parser.h"
 
-typedef struct config {
+struct {
     char filename[PATH_MAX];
     configtype_e configtype;
     config_worker_t *worker;
-} config_t;
-
-config_t g_config;
+} g_config;
 
 int config_init(const char *filename, const char *configtype)
 {
@@ -33,15 +31,20 @@ int config_init(const char *filename, const char *configtype)
     return 0;
 }
 
-int config_get_stream(void **ctx, sendertype_e stream_type, int *stream_size)
+int config_get_stream(config_t *cfg_out, streamtype_e stream_type, int *stream_size)
 {
     switch (stream_type)
     {
     case TCP:
-        g_config.worker->get_tcp_stream(ctx, stream_size);
+        g_config.worker->get_tcp_stream(g_config.filename, cfg_out, stream_size);
         break;
     default:
         break;
     }
     return 0;
 }
+
+// void config_destroy_stream(config_t *cfg_out)
+// {
+
+// }

@@ -1,6 +1,9 @@
-CC=gcc
-target = senda
+CC := gcc
+target := senda
+OBJ_PATH := ./build/
 
+
+########################### MAIN ################################
 $(target)_src = main.c \
 				eth/ethersend.c \
 				debug/debug.c \
@@ -11,10 +14,9 @@ $(target)_src = main.c \
 				config/json/json_parser.c
 
 $(target)_inc = -I$(shell pwd)
-
-$(target)_objs = $($(target)_src:.c=.o)
-
-$(target)_deps = $($(target)_objs:.o=.d) # one dependency file for each source
+OBJS := $(patsubst %,$(OBJ_PATH)%,$($(target)_src:.c=.o))
+DEPS := $(patsubst %,$(OBJ_PATH)%,$($(target)_src:.c=.d))
+###########################################################
 
 CFLAGS = -std=gnu11 \
 	-g3 \
@@ -35,31 +37,41 @@ CFLAGS = -std=gnu11 \
 	-Wmissing-declarations \
 	-Wmissing-include-dirs \
 	-Wredundant-decls \
-	-Wsign-conversion \
 	-Wstrict-overflow=5 \
 	-Wswitch-default \
 	-Werror \
 	-Wno-unused
 
-all: $(target) post-target
+LDFLAGS = -ljson-c
 
-%.d: %.c
+all: start $(target) post-target
+
+$(OBJ_PATH)%.d: %.c
+	@mkdir -p $(@D)
 	@$(CC) $(CFLAGS) $($(target)_inc) $< -MM -MT $(@:.d=.o) >$@
 
-%.o: %.c
-	$(CC) $(CFLAGS) $($(target)_inc) -c $< -o $@
+$(OBJ_PATH)%.o: %.c
+	@mkdir -p $(@D)
+	$(info [Build] $@)
+	@$(CC) $(CFLAGS) $($(target)_inc) -c $< -o $@
 
-$(target): $($(target)_objs)
-	$(CC) $(CFLAGS) -o $(target) $($(target)_objs)
+$(target): start $(OBJS)
+	@$(CC) $(CFLAGS) $(OBJS) -o $(target) $(LDFLAGS)
 
 post-target: $(target)
-	mkdir -p .build
-	find . -name '*.d' -exec mv -v {} .build \;
-	find . -name '*.o' -exec mv -v {} .build \;
+	$(info [Generate] $(target).)
+	@echo "Done."
 
-include $($(target)_deps) # include all dep files in the makefile
+clean: start clean-test
+	$(info [Cleaning])
+	@rm -rf build $(target)
 
-clean:
-	rm -rf .build *d $(target) > /dev/null 2>&1
+start:
+	$(info ==================)
+	$(info [Target] $(target))
+	$(info ==================)
 
 .PHONY: clean all
+
+-include $(DEPS)
+include Makefile.test

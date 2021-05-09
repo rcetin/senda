@@ -30,8 +30,9 @@
 #endif
 
 #define BASE_16 16
-#define MAX_BUFFER_SIZE   1024
-#define MAX_IP_STR_SIZE   16
+#define MAX_DATA_SIZE       (1*1024*1024)
+#define MAX_BUFFER_SIZE     1024
+#define MAX_IP_STR_SIZE     16
 #define SEC 1
 #define MSEC (1000 * SEC)
 #define USEC (1000 * MSEC)

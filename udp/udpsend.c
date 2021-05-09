@@ -82,6 +82,11 @@ bail:
 void udp_destroy(void *priv)
 {
     udp_priv_t *private = priv;
+
+    if (!private) {
+        return;
+    }
+
     close(private->handle);
     SFREE(priv);
 }
