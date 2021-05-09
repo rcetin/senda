@@ -173,7 +173,6 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    fprintf(stderr, "TOTA=%d", TOTA);
     int tcp_stream_size;
     config_t tcpcfg;
     config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
@@ -238,6 +237,7 @@ bail:
     sender_dispatcher[ETH].worker->destroy(ethhandle);
     sender_dispatcher[UDP].worker->destroy(udphandle);
     sender_dispatcher[TCP].worker->destroy(tcphandle);
+    config_destroy();
 
     return ret;
 }

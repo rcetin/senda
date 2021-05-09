@@ -34,7 +34,7 @@ clean-test:
 start-test:
 	$(info ========= Build Test =========)
 	$(info [Target] $(test1) $(test2))
-	$(info ==================)
+	$(info ==============================)
 
 post-test:
 	$(info [Generate] $(test1) $(test2).)

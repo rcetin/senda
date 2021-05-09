@@ -156,6 +156,10 @@ bail:
 void tcp_destroy(void *priv)
 {
     tcp_priv_t *private = priv;
+    if (!private) {
+        return;
+    }
+
     close(private->handle);
     SFREE(priv);
 }

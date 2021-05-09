@@ -26,5 +26,6 @@ typedef struct config_worker {
 
 int config_init(const char *filename, const char *configtype);
 int config_get_stream(config_t *cfg_out, streamtype_e stream_type, int *stream_size);
+void config_destroy(void);
 
 #endif

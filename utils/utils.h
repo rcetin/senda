@@ -1,6 +1,9 @@
 #ifndef _UTILS_H
 #define _UTILS_H
 
+#include <sys/queue.h>
+#include <stdlib.h>
+
 #ifndef ETH_ALEN
 #define ETH_ALEN    6
 #endif
@@ -27,6 +30,17 @@
 
 #ifndef RESET_BIT
 #define RESET_BIT(val, mask)    (val &= ~mask)
+#endif
+
+#ifndef TAILQ_END
+#define	TAILQ_END(head)			(NULL)
+#endif
+
+#ifndef TAILQ_FOREACH_SAFE
+#define	TAILQ_FOREACH_SAFE(var, head, field, next)			\
+	for ((var) = ((head)->tqh_first);				\
+	    (var) != TAILQ_END(head) &&					\
+	    ((next) = TAILQ_NEXT(var, field), 1); (var) = (next))
 #endif
 
 #define BASE_16 16

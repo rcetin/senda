@@ -7,7 +7,7 @@
 #include "debug/debug.h"
 #include "tcp/tcpsend.h"
 
-static int json_get_tcp_stream(const char *filename, config_t *cfg_out, int *stream_size)
+static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_size)
 {
     int ret = -1;
     FILE *fp = NULL;
@@ -21,13 +21,13 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg_out, int *str
 
     debugf("[JSON] Enter");
 
-    if (!stream_size || !cfg_out) {
-        errorf("[JSON] null stream_size || cfg_out");
+    if (!stream_size) {
+        errorf("[JSON] null stream_size");
         goto bail;
     }
-    memset(cfg_out, 0, sizeof(*cfg_out));
 
-    fprintf(stderr, "filename=%s\n", filename);
+    memset(cfg, 0, sizeof(*cfg));
+
     fp = fopen(filename, "r");
     if (!fp) {
         errorf("[JSON] file open error");
@@ -60,34 +60,35 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg_out, int *str
             continue;
         }
 
-        cfg_out->cfg_size++;
+        cfg->cfg_size++;
 
-        void *cfg_ptr = realloc(cfg_out->streams, cfg_out->cfg_size * sizeof(stream_config_t));
+        void *cfg_ptr = realloc(cfg->streams, cfg->cfg_size * sizeof(stream_config_t));
         if (!cfg_ptr) {
             errorf("[JSON] mem allocation failed");
             goto bail;
         }
-        cfg_out->streams = cfg_ptr;
+        cfg->streams = cfg_ptr;
 
-        cfg_out->streams->stream_type = TCP;
+        cfg->streams->stream_type = TCP;
         const char *data = json_object_get_string(json_object_object_get(json.stream_elem, "data"));
         if (!data) {
             errorf("[JSON] get stream data failed");
             goto bail;
         }
-        memcpy(cfg_out->streams->data, data, strlen(data));
+        memcpy(cfg->streams->data, data, strlen(data));
 
-        tcpctx_t *tcpctx = calloc(1, sizeof(tcpctx));
+        tcpctx_t *tcpctx = calloc(1, sizeof(tcpctx_t));
         if (!tcpctx) {
             errorf("[JSON] mem allocation failed");
             goto bail;
         }
-        memset(&tcpctx, 0, sizeof (tcpctx));
+        memset(tcpctx, 0, sizeof(tcpctx_t));
         const char *ip = json_object_get_string(json_object_object_get(json.stream_elem, "ip"));
         if (!ip) {
             errorf("[JSON] get stream IP failed");
             goto bail;
         }
+        fprintf(stderr, "iplen: %lu, ip=%s\n", strlen(ip), ip);
         memcpy(tcpctx->ip, ip, strlen(ip));
 
         const char *port = json_object_get_string(json_object_object_get(json.stream_elem, "port"));
@@ -97,7 +98,7 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg_out, int *str
         }
         tcpctx->port = atoi(port);
 
-        cfg_out->streams->stream = tcpctx;
+        cfg->streams->stream = tcpctx;
     }
 
     // dump file 
@@ -105,13 +106,11 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg_out, int *str
 
     ret = 0;
 bail:
-    // json_object_put(json.stream_elem);
-    // json_object_put(json.streams);
     if (json.core) { json_object_put(json.core); }
     if (fp) { fclose(fp); }
     if (ret) {
-            SFREE(cfg_out->streams);
-            cfg_out->cfg_size = 0;
+            SFREE(cfg->streams);
+            cfg->cfg_size = 0;
     }
 
     debugf("[JSON] Returning ret: %d", ret);
