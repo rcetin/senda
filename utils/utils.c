@@ -82,6 +82,20 @@ long long int gettime_ms(void)
     return ts.tv_sec * MSEC + ts.tv_nsec / USEC;
 }
 
+const char *get_localtime(void)
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    char *buf;
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    buf = asctime(timeinfo);
+
+    buf[strlen(buf) - 1] = 0;
+    return buf;
+}
+
 uint8_t *generate_rand_data(size_t size)
 {
     static int seeded = 0;

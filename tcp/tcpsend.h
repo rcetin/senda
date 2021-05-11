@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 typedef struct tcpctx {
-    char ip[16];
+    char ip[32];
     int port;
 } tcpctx_t;
 

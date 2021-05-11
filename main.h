@@ -12,7 +12,6 @@ typedef enum streamtype_e {
     ETH,
     TCP,
     TOTAL_SENDER,
-    TOTA=10,
 } streamtype_e;
 
 struct sender {

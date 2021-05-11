@@ -62,6 +62,7 @@ int str2mac(const char*, uint8_t*);
 int mac2str(const uint8_t*, char*);
 unsigned int packet2proto(packet_t);
 long long int gettime_ms(void);
+const char *get_localtime(void);
 uint8_t *generate_rand_data(size_t);
 
 void printmac(uint8_t *mac);

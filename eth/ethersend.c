@@ -82,8 +82,6 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
 	/* Ethernet header */
     memcpy(eh->ether_shost, if_mac.ifr_hwaddr.sa_data, ETH_ALEN);
     memcpy(eh->ether_dhost, ectx->dstmac, ETH_ALEN);
-    printmac(eh->ether_shost);
-    printmac(eh->ether_dhost);
 
 	/* Ethertype field */
 	eh->ether_type = htons(packet2proto(ectx->ptype));
@@ -98,7 +96,6 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
 	socket_address.sll_ifindex = if_idx.ifr_ifindex;
 	socket_address.sll_halen = ETH_ALEN;
     memcpy(socket_address.sll_addr, ectx->dstmac, ETH_ALEN);
-    printmac(socket_address.sll_addr);
 
 	/* Send packet */
     uint32_t cnt = 0;
@@ -108,7 +105,7 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
         goto bail;
     }
 
-    debugf("[ETH] send success. Send %u bytes to "ETHER_STR" from: %s", ret, ETHER_ADDR(ectx->dstmac), ectx->ifname);
+    infof("[ETH] send success. [%u] bytes, ["ETHER_STR"]->["ETHER_STR"]", ret, ETHER_ADDR(if_mac.ifr_hwaddr.sa_data), ETHER_ADDR(ectx->dstmac));
     ret = 0;
 bail:
     debugf("[ETH] Returning, ret: %d", ret);

@@ -62,7 +62,7 @@ int udp_send(void *priv, uint8_t *data, uint32_t len)
 	si.sin_port = htons(udpctx->port);
 	
     if (inet_aton(udpctx->ip, &si.sin_addr) == 0) {
-        errorf("[UDP] invalid ip addr");
+        errorf("[UDP] invalid ip addr: %s", udpctx->ip);
         goto bail;
     }
 

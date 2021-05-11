@@ -42,7 +42,8 @@ CFLAGS = -std=gnu11 \
 	-Werror \
 	-Wno-unused
 
-LDFLAGS = -ljson-c
+LDFLAGS = -ljson-c \
+			-lpthread
 
 all: start $(target) post-target
 
