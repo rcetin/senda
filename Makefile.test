@@ -1,6 +1,11 @@
 test1 = test/test_tailq
 test2 = test/test_tcp
 
+red=\e[31m
+normal=\e[0m
+green=\e[32m
+yellow=\e[33m
+
 ########################## TEST1 #################################
 $(test1)_src = test/tailq/tailq.c
 $(test1)_inc = -I$(shell pwd)
@@ -36,15 +41,17 @@ start-test:
 	$(info [Target] $(test1) $(test2))
 	$(info ==============================)
 
+define run-test
+	@printf '$(green)\n%s\n$(normal)' "[Running] $(1)"
+	@./$(1)
+	@printf '$(green)\n%s\n$(normal)' "[Finished] $(1)"
+endef
+
 post-test:
 	$(info [Generate] $(test1) $(test2).)
 	@echo "Done."
 	@echo "Running tests..."
-	@echo "[RUN] Test: $(test1)"
-	@./$(test1)
-	@echo "[FINISHED] Test: $(test1)"
-	@echo "[RUN] Test: $(test2)"
-	@./$(test2)
-	@echo "[FINISHED] Test: $(test2)"
+	$(call run-test,$(test1))
+	$(call run-test,$(test2))
 
 -include $($(test1)_DEPS) $($(test2)_DEPS)
