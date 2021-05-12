@@ -24,7 +24,7 @@ void list_debug_levels(void);
 
 #define infof(...)                                                          \
         do { if (get_debug_level() < DEBUG_INFO) break;                     \
-            fprintf(stderr, "INFO: %s:%d: ",__FILE__, __LINE__);            \
+            fprintf(stderr, "INFO: ");            \
              fprintf(stderr, __VA_ARGS__); \
              fprintf(stderr, "\n"); } while (0)
 

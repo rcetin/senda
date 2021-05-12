@@ -122,6 +122,7 @@ void eth_destroy(void *priv)
 
     close(private->handle);
     SFREE(priv);
+    priv = NULL;
 }
 
 struct sender ethsender = {

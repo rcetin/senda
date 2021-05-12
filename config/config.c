@@ -51,7 +51,7 @@ static void config_stream_destroy(config_t *cfg)
 
     for (int i = 0; i < cfg->cfg_size; ++i) {
         errorf("[cfg] removing idx=%d", i);
-        SFREE(cfg->streams[i].stream);
+        SFREE(cfg->streams[i].stream_ctx);
     }
         errorf("[cfg] removing streams");
     SFREE(cfg->streams);

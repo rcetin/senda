@@ -98,7 +98,7 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
         }
         tcpctx->port = atoi(port);
 
-        cfg->streams->stream = tcpctx;
+        cfg->streams->stream_ctx = tcpctx;
     }
 
     // dump file 

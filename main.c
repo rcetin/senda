@@ -8,6 +8,7 @@
 #include <json-c/json.h>
 #include <limits.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include <net/if.h>
 
@@ -21,6 +22,7 @@
 
 static void print_help(void);
 static void show_current_opts(void);
+static void destroy_runtime_configs(void);
 
 static streamtype_e get_protocol_from_string(const char *str)
 {
@@ -42,7 +44,7 @@ void print_help(void)
             "-t, --interval [interval]  Packet interval (optional, default 1s)\n"
             "-l, --log              set log level\n"
             "-o, --opt              get current options\n"
-            "-s, --sender           sender type (\"tcp\", \"udp\", \"eth\")\n"
+            "-s, --sender           sender type (\"tcp\", \"udp (default)\", \"eth\")\n"
             "-a, --addr             IP address (necessary if sender is udp or tcp)\n"
             "-p, --port             port (necessary if sender is udp or tcp)\n");
 }
@@ -70,16 +72,22 @@ static struct option long_options[] = {
 
 typedef struct single_mode_cfg {
     streamtype_e protocol;
-    unsigned char dstmac[ETH_ALEN];
-    char ifname[IFNAMSIZ];
-    char ip[32];
-    uint32_t port;
     uint8_t *data;
     uint32_t datalen;
     uint32_t interval_ms;
     uint32_t count;
     void *ctx;
+    void *sender_handle;
 } single_mode_cfg_t;
+
+struct cfg_node {
+    TAILQ_ENTRY(cfg_node) node;
+    single_mode_cfg_t *cfg;
+    pthread_t *thread_data;
+};
+TAILQ_HEAD(configq, cfg_node);
+
+struct configq g_configs;
 
 struct global_sender {
     char name[16];
@@ -93,11 +101,44 @@ struct global_sender sender_dispatcher[TOTAL_SENDER] = {
     {.name = "tcp", .worker = &tcpsender},
 };
 
+static void sigint_handler(int sig)
+{
+    struct cfg_node *cnode = NULL;
+    int ret;
+    void *sender_handle = NULL;
+
+    TAILQ_FOREACH(cnode, &g_configs, node) {
+        ret = pthread_cancel(*cnode->thread_data);
+        if (ret) {
+            errorf("[SIGINT] thread cancel failed");
+        }
+
+        ret = pthread_join(*cnode->thread_data, NULL);
+        if (ret) {
+            errorf("thread join failed");
+        }
+
+        sender_handle = cnode->cfg->sender_handle;
+        sender_dispatcher[cnode->cfg->protocol].worker->destroy(sender_handle);
+    }
+
+    destroy_runtime_configs();
+    exit(EXIT_SUCCESS);
+}
+
 static void *single_mode_run(void *arg)
 {
+    int ret = -1;
     single_mode_cfg_t *cfg = arg;
+
     int loop = (cfg->count) ? 0 : 1;
     void *sender_handle = sender_dispatcher[cfg->protocol].worker->create(cfg->ctx);
+    if (!sender_handle) {
+        errorf("sender creation failed");
+        goto bail;
+    }
+
+    cfg->sender_handle = sender_handle;
     uint32_t sleep_duration = (cfg->interval_ms) ? (cfg->interval_ms * MSEC) : (100 * USEC);
     while (loop || cfg->count--) {
         infof("[Single Mode] %s", get_localtime());
@@ -106,10 +147,46 @@ static void *single_mode_run(void *arg)
         fprintf(stderr, "\n");
     }
     sender_dispatcher[cfg->protocol].worker->destroy(sender_handle);
+    ret = 0;
 
-    pthread_exit(0);
+bail:
+    pthread_exit(&ret);
 
     return 0;
+}
+
+static void fill_runtime_config(single_mode_cfg_t *cfg, void *ctx, streamtype_e protocol,
+    uint32_t interval_ms, uint32_t count, uint8_t *data, uint32_t datalen)
+{
+    cfg->protocol = protocol;
+    cfg->interval_ms = interval_ms;
+    cfg->count = count;
+    cfg->data = data;
+    cfg->datalen = datalen;
+    cfg->ctx = ctx;
+}
+
+static void clean_runtime_config(single_mode_cfg_t *cfg)
+{
+    if (!cfg) {
+        return;
+    }
+
+    SFREE(cfg->data);
+    SFREE(cfg->ctx);
+}
+
+static void destroy_runtime_configs(void)
+{
+    struct cfg_node *cnode, *tnode;
+
+    TAILQ_FOREACH_SAFE(cnode, &g_configs, node, tnode) {
+        clean_runtime_config(cnode->cfg);
+        SFREE(cnode->thread_data);
+        SFREE(cnode->cfg);
+        TAILQ_REMOVE(&g_configs, cnode, node);
+        SFREE(cnode);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -119,17 +196,32 @@ int main(int argc, char *argv[])
     char cfg_filename[PATH_MAX] = {0};
     int ret = EXIT_FAILURE;
     int cfg_from_file = 0;
-    ethctx_t ectx = {.ptype = 1};
-    tcpctx_t tctx = {0};
-    udpctx_t uctx = {0};
-    single_mode_cfg_t single_cfg;
+    ethctx_t *ectx = NULL;
+    tcpctx_t *tctx = NULL;
+    udpctx_t *uctx = NULL;
+    unsigned char dstmac[ETH_ALEN] = {0};
+    char ifname[IFNAMSIZ] = {0};
+    char ip[32] = {0};
+    uint32_t port = 0;
+    streamtype_e protocol;
+    uint8_t *data = NULL;
+    uint32_t datalen = 0;
+    uint32_t interval_ms = 0;
+    uint32_t count = 0;
+    pthread_t *thread_data = NULL;
+    struct sigaction sigint_action = {.sa_handler = sigint_handler};
 
     if (argc < 2) {
         print_help();
         goto bail;
     }
 
-    memset(&single_cfg, 0, sizeof(single_cfg));
+    TAILQ_INIT(&g_configs);
+
+    if (sigaction(SIGINT, &sigint_action, NULL)) {
+        errorf("[MAIN] Sigint handler set is failed");
+        goto bail;
+    }
 
     while (1) {
         int option_index = 0;
@@ -140,19 +232,19 @@ int main(int argc, char *argv[])
 
         switch (c) {
         case 'd':
-            if (str2mac(optarg, single_cfg.dstmac)) {
+            if (str2mac(optarg, dstmac)) {
                 errorf("MAC format is wrong\n");
                 goto bail;
             }
             break;
 
         case 'i':
-            memcpy(single_cfg.ifname, optarg, strlen(optarg));
+            memcpy(ifname, optarg, strlen(optarg));
             break;
 
         case 'b':
-            single_cfg.data = str2hex(optarg, &single_cfg.datalen);
-            if (single_cfg.data == NULL) {
+            data = str2hex(optarg, &datalen);
+            if (data == NULL) {
                 errorf("Data parsing is failed\n");
                 goto bail;
             }
@@ -160,18 +252,18 @@ int main(int argc, char *argv[])
 
         case 'r':
             errno = 0;
-            single_cfg.datalen = strtol(optarg, NULL, 0);
+            datalen = strtol(optarg, NULL, 0);
             if (errno) {
                 errorf("Failed to parse count\n");
                 goto bail;
             }
-            single_cfg.data = generate_rand_data((size_t)single_cfg.datalen);
+            data = generate_rand_data((size_t)datalen);
             
             break;
 
         case 'c':
             errno = 0;
-            single_cfg.count = strtol(optarg, NULL, 0);
+            count = strtol(optarg, NULL, 0);
             if (errno) {
                 errorf("Failed to parse count\n");
                 goto bail;
@@ -180,7 +272,7 @@ int main(int argc, char *argv[])
 
         case 't':
             errno = 0;
-            single_cfg.interval_ms = strtol(optarg, NULL, 0);
+            interval_ms = strtol(optarg, NULL, 0);
             if (errno) {
                 errorf("Failed to parse count\n");
                 goto bail;
@@ -202,16 +294,16 @@ int main(int argc, char *argv[])
             break;
 
         case 's':
-            single_cfg.protocol = get_protocol_from_string(optarg);
+            protocol = get_protocol_from_string(optarg);
             break;
 
         case 'a':
-            strncpy(single_cfg.ip, optarg, sizeof(single_cfg.ip) - 1);
-            fprintf(stderr, "ip given: %s, sizeof(single_cfg.ip): %lu, copied: %s\n\n", optarg, sizeof(single_cfg.ip), single_cfg.ip);
+            strncpy(ip, optarg, sizeof(ip) - 1);
+            fprintf(stderr, "ip given: %s, sizeof(single_cfg.ip): %lu, copied: %s\n\n", optarg, sizeof(ip), ip);
             break;
 
         case 'p':
-            single_cfg.port = atoi(optarg);
+            port = atoi(optarg);
             break;
 
         case '?':
@@ -225,48 +317,91 @@ int main(int argc, char *argv[])
     }    
 
     if (!cfg_from_file) {
-        if (single_cfg.data == NULL) {
+        if (data == NULL) {
             errorf("Please, give binary data or random data or a config file");
             goto bail;
         }
 
-        // Single mode
-        single_mode = 1;
-        if (single_cfg.protocol == ETH) {
-            if (single_cfg.ifname[0] == 0 || single_cfg.dstmac[0] == 0) {
+        single_mode_cfg_t *cfg = calloc(1, sizeof(*cfg));
+        void *current_ctx = NULL;
+        if (!cfg) {
+            errorf("mem allocation failed");
+            goto bail;
+        }
+
+        if (protocol == ETH) {
+            if (ifname[0] == 0 || dstmac[0] == 0) {
                 errorf("Stream is ETH, ifname and destination MAC should be given.");
                 goto bail;
             }
-            memcpy(ectx.ifname, single_cfg.ifname, IFNAMSIZ);
-            memcpy(ectx.dstmac, single_cfg.dstmac, ETH_ALEN);
-            single_cfg.ctx = &ectx;
-        } else if (single_cfg.protocol == TCP) {
-            if (single_cfg.port == 0 || single_cfg.ip[0] == 0) {
+
+            ectx = calloc(1, sizeof(*ectx));
+            if (!ectx) {
+                errorf("mem alloc failed");
+                goto bail;
+            }
+
+            memcpy(ectx->ifname, ifname, IFNAMSIZ);
+            memcpy(ectx->dstmac, dstmac, ETH_ALEN);
+            current_ctx = ectx;
+        } else if (protocol == TCP) {
+            if (port == 0 || ip[0] == 0) {
                 errorf("Stream is TCP, port and destination IP should be given.");
                 goto bail;
             }
-            tctx.port = single_cfg.port;
-            strncpy(tctx.ip, single_cfg.ip, sizeof(tctx.ip) - 1);
-            single_cfg.ctx = &tctx;
-        } else if (single_cfg.protocol == UDP) {
-            if (single_cfg.port == 0 || single_cfg.ip[0] == 0) {
+
+            tctx = calloc(1, sizeof(*tctx));
+            if (!tctx) {
+                errorf("mem alloc failed");
+                goto bail;
+            }
+
+            tctx->port = port;
+            strncpy(tctx->ip, ip, sizeof(tctx->ip) - 1);
+            current_ctx = tctx;
+        } else if (protocol == UDP) {
+            if (port == 0 || ip[0] == 0) {
                 errorf("Stream is UDP, port and destination IP should be given.");
                 goto bail;
             }
-            uctx.port = single_cfg.port;
-            strncpy(uctx.ip, single_cfg.ip, sizeof(uctx.ip) - 1);
-            single_cfg.ctx = &uctx;
+
+            uctx = calloc(1, sizeof(*uctx));
+            if (!uctx) {
+                errorf("mem alloc failed");
+                goto bail;
+            }
+
+            uctx->port = port;
+            strncpy(uctx->ip, ip, sizeof(uctx->ip) - 1);
+            current_ctx = uctx;
         }
 
-        pthread_t sthread_id;
-        int *retval = NULL;
-        ret = pthread_create(&sthread_id, NULL, single_mode_run, &single_cfg); 
+        thread_data = calloc(1, sizeof(*thread_data));
+        if (!thread_data) {
+            errorf("mem alloc failed");
+            goto bail;
+        }
+
+        fill_runtime_config(cfg, current_ctx, protocol, interval_ms, count, data, datalen);
+
+        ret = pthread_create(thread_data, NULL, single_mode_run, cfg); 
         if (ret) {
             errorf("thread create failed");
             goto bail;
         }
 
-        ret = pthread_join(sthread_id, (void **)&retval);
+        struct cfg_node *cnode = calloc(1, sizeof(*cnode));
+        if (!cnode) {
+            errorf("mem alloc failed");
+            ret = -1;
+            goto bail;
+        }
+
+        cnode->cfg = cfg;
+        cnode->thread_data = thread_data;
+        TAILQ_INSERT_TAIL(&g_configs, cnode, node);
+
+        ret = pthread_join(*thread_data, NULL);
         if (ret) {
             errorf("thread join failed");
             goto bail;
@@ -278,9 +413,6 @@ int main(int argc, char *argv[])
     // @todo:
     // capture SIGINT for single mode or other also
 
-    // long long int ts_begin, ts_end;
-    // uint32_t cnt = 0;
-
     // if (config_init(cfg_filename, "json")) {
     //     errorf("config initialization failed");
     //     goto bail;
@@ -289,6 +421,42 @@ int main(int argc, char *argv[])
     // int tcp_stream_size;
     // config_t tcpcfg;
     // config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
+
+    // for (int i = 0; i < tcpcfg.cfg_size; ++i) {
+    //     stream_config_t *stream = &tcpcfg.streams[i];
+    //     tcpctx_t tcpctx;
+    //     void *tcphandle = sender_dispatcher[TCP].worker->create(&tcpcfg.streams[i]);
+    //     if (!tcphandle) {
+    //         errorf("TCP Handle NULL, exit");
+    //         goto bail;
+    //     }
+
+    //     pthread_t thread_data;
+    //     single_mode_cfg_t cfg;
+    //     memset(&cfg, 0, sizeof(cfg));
+
+    //     cfg.protocol == TCP;
+    //     strncpy(cfg.ip, tcpctx->ip, sizeof(cfg.ip) - 1);
+    //     cfg.port = tcpctx->port;
+    //     cfg.data = str2hex(stream->data, &cfg.datalen);
+    //     if (!cfg.data) {
+    //         errorf("Data parsing failed");
+    //         goto bail;
+    //     }
+
+    //     ret = pthread_create(&thread_data, NULL, single_mode_run, &single_cfg); 
+    //     if (ret) {
+    //         errorf("thread create failed");
+    //         goto bail;
+    //     }
+
+    //     struct thread_node tnode;
+    //     memset(&tnode, 0, sizeof(tnode));
+    //     memcpy(&tnode.thread_data, &thread_data, sizeof(thread_data));
+    //     TAILQ_INSERT_TAIL(&multi_cfg.threads, &tnode, node);
+    // }
+    
+    
 
     // void *ethhandle = sender_dispatcher[ETH].worker->create(&ectx);
     // if (!ethhandle) {
@@ -304,11 +472,6 @@ int main(int argc, char *argv[])
 
     
     
-    // void *tcphandle = sender_dispatcher[TCP].worker->create(&tctx);
-    // if (!tcphandle) {
-    //     errorf("TCP Handle NULL, exit");
-    //     goto bail;
-    // }
 
     // while (1)
     // {
@@ -341,9 +504,7 @@ int main(int argc, char *argv[])
 
     ret = EXIT_SUCCESS;
 bail:
-    if (single_mode) {
-        SFREE(single_cfg.data);
-    }
+    destroy_runtime_configs();
     
     // sender_dispatcher[ETH].worker->destroy(ethhandle);
     // sender_dispatcher[UDP].worker->destroy(udphandle);

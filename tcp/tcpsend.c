@@ -72,7 +72,7 @@ void *tcp_create(void *ctx)
     }
 
     private->handle = fd;
-    memcpy(private->addr.ip, addr->ip, sizeof(private->addr.ip));
+    strncpy(private->addr.ip, addr->ip, sizeof(private->addr.ip) - 1);
     private->addr.port = addr->port;
 
     // Set a signal handler for SIGPIPE
@@ -146,7 +146,7 @@ int tcp_send(void *priv, uint8_t *data, uint32_t len)
         goto bail;
     }
 
-    debugf("[TCP] send success. Send %u bytes", ret);
+    infof("[TCP] send success. [%u] bytes, [%s]->[%s]", ret, "0.0.0.0", tcpx->ip);
     ret = 0;
 bail:
     debugf("[TCP] Returning ret: %d", ret);
@@ -162,6 +162,7 @@ void tcp_destroy(void *priv)
 
     close(private->handle);
     SFREE(priv);
+    priv = NULL;
 }
 
 struct sender tcpsender = {

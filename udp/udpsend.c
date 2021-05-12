@@ -72,7 +72,7 @@ int udp_send(void *priv, uint8_t *data, uint32_t len)
         goto bail;
     }
 
-    debugf("[UDP] send success. Send %u bytes", ret);
+    infof("[UDP] send success. [%u] bytes, [%s]->[%s]", ret, "0.0.0.0", udpctx->ip);
     ret = 0;
 bail:
     errorf("[UDP] Returning ret: %d", ret);
@@ -89,6 +89,7 @@ void udp_destroy(void *priv)
 
     close(private->handle);
     SFREE(priv);
+    priv = NULL;
 }
 
 struct sender udpsender = {

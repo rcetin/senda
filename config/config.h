@@ -12,7 +12,7 @@ typedef enum configtype {
 typedef struct stream_config {
     char data[MAX_DATA_SIZE];
     streamtype_e stream_type;
-    void *stream;   // tcpctx_t, ethctx_t, udpctx_t
+    void *stream_ctx;   // tcpctx_t, ethctx_t, udpctx_t
 } stream_config_t;
 
 typedef struct config {
