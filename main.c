@@ -107,6 +107,8 @@ static void sigint_handler(int sig)
     int ret;
     void *sender_handle = NULL;
 
+    fprintf(stderr, "HANDLE SIGINT!\n");
+
     TAILQ_FOREACH(cnode, &g_configs, node) {
         ret = pthread_cancel(*cnode->thread_data);
         if (ret) {
@@ -152,6 +154,60 @@ static void *single_mode_run(void *arg)
 bail:
     pthread_exit(&ret);
 
+    return 0;
+}
+
+static int prepare_eth_ctx(ethctx_t **ctx, char *ifname, uint8_t *dstmac)
+{
+    if (!ctx) {
+        errorf("[MAIN] eth ctx null");
+        return -1;
+    }
+
+    *ctx = calloc(1, sizeof(ethctx_t));
+    if (!*ctx) {
+        errorf("mem alloc failed");
+        return -1;
+    }
+
+    memcpy((*ctx)->ifname, ifname, IFNAMSIZ - 1);
+    memcpy((*ctx)->dstmac, dstmac, ETH_ALEN);
+    return 0;
+}
+
+static int prepare_udp_ctx(udpctx_t **ctx, char *ip, uint32_t port)
+{
+    if (!ctx) {
+        errorf("[MAIN] udp ctx null");
+        return -1;
+    }
+
+    *ctx = calloc(1, sizeof(udpctx_t));
+    if (!*ctx) {
+        errorf("mem alloc failed");
+        return -1;
+    }
+
+    (*ctx)->port = port;
+    strncpy((*ctx)->ip, ip, sizeof((*ctx)->ip) - 1);
+    return 0;
+}
+
+static int prepare_tcp_ctx(tcpctx_t **ctx, char *ip, uint32_t port)
+{
+    if (!ctx) {
+        errorf("[MAIN] tcp ctx null");
+        return -1;
+    }
+
+    *ctx = calloc(1, sizeof(tcpctx_t));
+    if (!*ctx) {
+        errorf("mem alloc failed");
+        return -1;
+    }
+
+    (*ctx)->port = port;
+    strncpy((*ctx)->ip, ip, sizeof((*ctx)->ip) - 1);
     return 0;
 }
 
@@ -299,7 +355,6 @@ int main(int argc, char *argv[])
 
         case 'a':
             strncpy(ip, optarg, sizeof(ip) - 1);
-            fprintf(stderr, "ip given: %s, sizeof(single_cfg.ip): %lu, copied: %s\n\n", optarg, sizeof(ip), ip);
             break;
 
         case 'p':
@@ -335,14 +390,9 @@ int main(int argc, char *argv[])
                 goto bail;
             }
 
-            ectx = calloc(1, sizeof(*ectx));
-            if (!ectx) {
-                errorf("mem alloc failed");
+            if (prepare_eth_ctx(&ectx, ifname, dstmac)) {
                 goto bail;
             }
-
-            memcpy(ectx->ifname, ifname, IFNAMSIZ);
-            memcpy(ectx->dstmac, dstmac, ETH_ALEN);
             current_ctx = ectx;
         } else if (protocol == TCP) {
             if (port == 0 || ip[0] == 0) {
@@ -350,14 +400,9 @@ int main(int argc, char *argv[])
                 goto bail;
             }
 
-            tctx = calloc(1, sizeof(*tctx));
-            if (!tctx) {
-                errorf("mem alloc failed");
+            if (prepare_tcp_ctx(&tctx, ip, port)) {
                 goto bail;
             }
-
-            tctx->port = port;
-            strncpy(tctx->ip, ip, sizeof(tctx->ip) - 1);
             current_ctx = tctx;
         } else if (protocol == UDP) {
             if (port == 0 || ip[0] == 0) {
@@ -365,14 +410,9 @@ int main(int argc, char *argv[])
                 goto bail;
             }
 
-            uctx = calloc(1, sizeof(*uctx));
-            if (!uctx) {
-                errorf("mem alloc failed");
+            if (prepare_udp_ctx(&uctx, ip, port)) {
                 goto bail;
             }
-
-            uctx->port = port;
-            strncpy(uctx->ip, ip, sizeof(uctx->ip) - 1);
             current_ctx = uctx;
         }
 

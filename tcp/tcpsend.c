@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <sys/select.h>
 
 #include "tcpsend.h"
 #include "main.h"
@@ -25,7 +27,7 @@ struct sigaction sigpipe_action = {.sa_handler = SIG_IGN};
 
 static int tcp_open(void)
 {
-    return socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    return socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_IP);
 }
 
 static int tcp_connect(tcp_priv_t *priv)
@@ -33,6 +35,7 @@ static int tcp_connect(tcp_priv_t *priv)
     struct sockaddr_in si;
     tcpctx_t *tcpx = &priv->addr;
     int ret = 0;
+    int arg = 0;
 
     memset((char *) &si, 0, sizeof(si));
 	si.sin_family = AF_INET;
@@ -44,10 +47,70 @@ static int tcp_connect(tcp_priv_t *priv)
         goto bail;
     }
 
-    if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0) {
-		errorf("[TCP] connect error");
+    arg = fcntl(priv->handle, F_GETFL, NULL);
+    if (arg < 0) {
+        errorf("[TCP] GETFL failed");
         ret = -1;
-		goto bail;
+        goto bail;
+    }
+
+    // arg |= O_NONBLOCK;
+    fprintf(stderr, "FLAG=%d\n", arg);
+
+    if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0) {
+        if (errno == EINPROGRESS) {
+            struct timeval tv;
+            fd_set tcpwrset;
+
+            tv.tv_sec = 15;
+            tv.tv_usec = 0;
+            FD_ZERO(&tcpwrset);
+            FD_SET(priv->handle, &tcpwrset);
+
+
+            ret = select(priv->handle + 1, NULL, &tcpwrset, NULL, &tv);
+            if (ret < 0) {
+                errorf("[TCP] select failed");
+                goto bail;
+            }
+
+            if (!ret) {
+                errno = 0;
+                errorf("[TCP] Connection timeout");
+                ret = -1;
+                goto bail;
+            }
+
+            if (ret == 1) {
+                if (FD_ISSET(priv->handle, &tcpwrset)) {
+                    int so_error;
+                    socklen_t len = sizeof(so_error);
+                    ret = 0;
+
+                    if (getsockopt(priv->handle, SOL_SOCKET, SO_ERROR, &so_error, &len)) {
+                        errorf("[TCP] getsockopt failed");
+                        ret = -1;
+                        goto bail;
+                    }
+
+                    if (so_error) {
+                        errno = so_error;
+                        errorf("[TCP] Connection failed");
+                        ret = -1;
+                        goto bail;
+                    }
+
+                    arg &= ~O_NONBLOCK;
+                    if (fcntl(priv->handle, F_SETFL, arg)) {
+                        errorf("[TCP] SETFL failed");
+                        ret = -1;
+                        goto bail;
+                    }
+
+                    infof("[TCP] Connection successful");
+                }
+            }
+        }
 	}
 
 bail:

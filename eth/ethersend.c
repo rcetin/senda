@@ -54,13 +54,13 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
 {
     eth_priv *private = priv;
     int sockfd = private->handle;
-	struct ifreq if_idx;
-	struct ifreq if_mac;
-	uint64_t tx_len = 0;
-	char sendbuf[MAX_BUFFER_SIZE];
-	struct ether_header *eh = (struct ether_header *) sendbuf;
-	struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
-	struct sockaddr_ll socket_address;
+    struct ifreq if_idx;
+    struct ifreq if_mac;
+    uint64_t tx_len = 0;
+    char sendbuf[MAX_BUFFER_SIZE];
+    struct ether_header *eh = (struct ether_header *) sendbuf;
+    struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
+    struct sockaddr_ll socket_address;
     struct ethctx *ectx = &private->ctx;
     int ret = -1;
 
@@ -76,28 +76,28 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
         goto bail;
     }
 
-	/* Construct the Ethernet header */
-	memset(sendbuf, 0, MAX_BUFFER_SIZE);
+    /* Construct the Ethernet header */
+    memset(sendbuf, 0, MAX_BUFFER_SIZE);
 
-	/* Ethernet header */
+    /* Ethernet header */
     memcpy(eh->ether_shost, if_mac.ifr_hwaddr.sa_data, ETH_ALEN);
     memcpy(eh->ether_dhost, ectx->dstmac, ETH_ALEN);
 
-	/* Ethertype field */
-	eh->ether_type = htons(packet2proto(ectx->ptype));
-	tx_len += sizeof(struct ether_header);
+    /* Ethertype field */
+    eh->ether_type = htons(packet2proto(ectx->ptype));
+    tx_len += sizeof(struct ether_header);
 
-	/* Packet data */
+    /* Packet data */
     memcpy(sendbuf + tx_len, data, len);
     tx_len += len;
 
     memset(&socket_address, 0, sizeof(socket_address));
     socket_address.sll_family = AF_PACKET;
-	socket_address.sll_ifindex = if_idx.ifr_ifindex;
-	socket_address.sll_halen = ETH_ALEN;
+    socket_address.sll_ifindex = if_idx.ifr_ifindex;
+    socket_address.sll_halen = ETH_ALEN;
     memcpy(socket_address.sll_addr, ectx->dstmac, ETH_ALEN);
 
-	/* Send packet */
+    /* Send packet */
     uint32_t cnt = 0;
     ret = (int)sendto(sockfd, sendbuf, tx_len, MSG_CONFIRM, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll));
     if (ret == -1) {
