@@ -50,6 +50,8 @@
 #define SEC 1
 #define MSEC (1000 * SEC)
 #define USEC (1000 * MSEC)
+#define INTERVAL_MS_DEFAULT 1000
+#define COUNT_DEFAULT       0
 
 typedef enum {
     ARP,

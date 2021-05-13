@@ -6,6 +6,7 @@
 #include "config/config.h"
 #include "debug/debug.h"
 #include "tcp/tcpsend.h"
+#include "utils/utils.h"
 
 static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_size)
 {
@@ -30,7 +31,7 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
 
     fp = fopen(filename, "r");
     if (!fp) {
-        errorf("[JSON] file open error");
+        errorf("[JSON] file open error: %s", filename);
         goto bail;
     }
 
@@ -62,11 +63,13 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
 
         cfg->cfg_size++;
 
-        void *cfg_ptr = realloc(cfg->streams, cfg->cfg_size * sizeof(stream_config_t));
+        stream_config_t *cfg_ptr = realloc(cfg->streams, cfg->cfg_size * sizeof(stream_config_t));
         if (!cfg_ptr) {
             errorf("[JSON] mem allocation failed");
             goto bail;
         }
+        memset(cfg_ptr + (cfg->cfg_size - 1), 0, sizeof(stream_config_t));
+
         cfg->streams = cfg_ptr;
 
         cfg->streams->stream_type = TCP;
@@ -88,8 +91,9 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
             errorf("[JSON] get stream IP failed");
             goto bail;
         }
-        fprintf(stderr, "iplen: %lu, ip=%s\n", strlen(ip), ip);
+        infof("iplen: %lu, ip=%s\n", strlen(ip), ip);
         memcpy(tcpctx->ip, ip, strlen(ip));
+        infof("tcpctx->ipiplen: %lu, tcpctx->ipip=%s\n", strlen(tcpctx->ip), tcpctx->ip);
 
         const char *port = json_object_get_string(json_object_object_get(json.stream_elem, "port"));
         if (!port) {
@@ -97,6 +101,20 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
             goto bail;
         }
         tcpctx->port = atoi(port);
+
+        const char *count = json_object_get_string(json_object_object_get(json.stream_elem, "count"));
+        if (!count) {
+            cfg->streams->count = COUNT_DEFAULT;
+            goto bail;
+        }
+        cfg->streams->count = atoi(count);
+
+        const char *interval_ms = json_object_get_string(json_object_object_get(json.stream_elem, "interval_ms"));
+        if (!interval_ms) {
+            cfg->streams->interval_ms = INTERVAL_MS_DEFAULT;
+            goto bail;
+        }
+        cfg->streams->interval_ms = atoi(interval_ms);
 
         cfg->streams->stream_ctx = tcpctx;
     }

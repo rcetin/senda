@@ -42,7 +42,7 @@ static int tcp_connect(tcp_priv_t *priv)
 	si.sin_port = htons(tcpx->port);
 	
     if (inet_aton(tcpx->ip, &si.sin_addr) == 0) {
-        errorf("[TCP] invalid ip addr");
+        errorf("[TCP] invalid ip addr: %s", tcpx->ip);
         ret = -1;
         goto bail;
     }
@@ -53,9 +53,6 @@ static int tcp_connect(tcp_priv_t *priv)
         ret = -1;
         goto bail;
     }
-
-    // arg |= O_NONBLOCK;
-    fprintf(stderr, "FLAG=%d\n", arg);
 
     if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0) {
         if (errno == EINPROGRESS) {
@@ -121,6 +118,8 @@ void *tcp_create(void *ctx)
 {
     tcpctx_t *addr = ctx;
     tcp_priv_t *private = NULL;
+
+    fprintf(stderr, "TCP ctx: %p\n", ctx);
 
     int fd = tcp_open();
     if (fd == -1) {

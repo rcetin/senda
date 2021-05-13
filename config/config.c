@@ -51,7 +51,7 @@ static void config_stream_destroy(config_t *cfg)
 
     for (int i = 0; i < cfg->cfg_size; ++i) {
         errorf("[cfg] removing idx=%d", i);
-        SFREE(cfg->streams[i].stream_ctx);
+        // SFREE(cfg->streams[i].stream_ctx);
     }
         errorf("[cfg] removing streams");
     SFREE(cfg->streams);
@@ -84,10 +84,8 @@ int config_get_stream(config_t *cfg_out, streamtype_e stream_type, int *stream_s
 
 void config_destroy(void)
 {
-    errorf("CALLING CFG DESTROY!");
     struct node *p, *tp;
     TAILQ_FOREACH_SAFE(p, &g_config.configq, nodes, tp) {
-        errorf("foreach!");
         TAILQ_REMOVE(&g_config.configq, p, nodes);
         config_stream_destroy(p->cfg);
         

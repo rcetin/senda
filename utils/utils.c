@@ -40,6 +40,7 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
 {
     uint32_t len;
     uint8_t *elem;
+    unsigned int tmp;
 
     if (str == NULL) {
         return NULL;
@@ -50,15 +51,21 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
         return NULL;
     }
     len /= 2;
+    len++;
 
+    errorf("calloc len: %d", len);
     elem = (uint8_t *)calloc(1, len);
     if (elem == NULL) {
         errorf("failed to allocate\n");
         return NULL;
     }
 
-    for (uint32_t i = 0; i < len; ++i, str += 2)
-        sscanf(str, "%02x", (unsigned int *)&elem[i]);
+    for (uint32_t i = 0; i < len; ++i, str += 2) {
+        sscanf(str, "%02x", &tmp);
+        elem[i] = tmp;
+        // errorf("%p->%d:%02x", (void *)&elem[i], i, elem[i]);
+    }
+        
     *datalen = len;
 
     return elem;

@@ -2,12 +2,9 @@
   "stream":[{
   	"type": "tcp",
   	"data":"AABBCCCSDASDADSASDASD",
-  	"ip":"192.168.2.222",
-	"port": 22222,
-  },{
-  	"type": "udp",
-  	"data":"AABBCCCSDASDADSASDASD",
-  	"ip":"192.168.2.222",
-	"port": 22222,
+  	"ip":"0.0.0.0",
+	"port": 3333,
+	"count": 11,
+	"interval_ms": 1000,
   }]
 }
