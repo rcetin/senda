@@ -6,11 +6,6 @@
 
 struct sender udpsender;
 
-typedef struct udpctx {
-    char ip[MAX_IP_STR_SIZE];
-    int port;
-} udpctx_t;
-
 void *udp_create(void *ctx);
 int udp_send(void *priv, uint8_t *data, uint32_t len);
 void udp_destroy(void *priv);

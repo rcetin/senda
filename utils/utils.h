@@ -57,6 +57,11 @@ typedef enum {
     ARP,
 } packet_t;
 
+typedef struct transportctx {
+    char ip[MAX_IP_STR_SIZE];
+    int port;
+} transportctx_t;
+
 struct ifreq;
 
 uint8_t *str2hex(char*, uint32_t*);

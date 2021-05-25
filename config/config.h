@@ -23,7 +23,7 @@ typedef struct config {
 } config_t;
 
 typedef struct config_worker {
-    int (*get_tcp_stream)(const char *filename, config_t *cfg_out, int *stream_size);
+    int (*get_stream)(const char *filename, streamtype_e stream_type, config_t *cfg_out, int *stream_size);
 } config_worker_t;
 
 int config_init(const char *filename, const char *configtype);

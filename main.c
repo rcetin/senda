@@ -156,7 +156,6 @@ static int join_all_threads(void)
         infof("Joining succeed: %u", (unsigned int)*(cnode)->thread_data);        
 
         destroy_single_config(cnode);
-        // TAILQ_REMOVE(&g_configs, cnode, node);
     }
 
 bail:
@@ -210,14 +209,14 @@ static int prepare_eth_ctx(ethctx_t **ctx, char *ifname, uint8_t *dstmac)
     return 0;
 }
 
-static int prepare_udp_ctx(udpctx_t **ctx, char *ip, uint32_t port)
+static int prepare_udp_ctx(transportctx_t **ctx, char *ip, uint32_t port)
 {
     if (!ctx) {
         errorf("[MAIN] udp ctx null");
         return -1;
     }
 
-    *ctx = calloc(1, sizeof(udpctx_t));
+    *ctx = calloc(1, sizeof(transportctx_t));
     if (!*ctx) {
         errorf("mem alloc failed");
         return -1;
@@ -228,14 +227,14 @@ static int prepare_udp_ctx(udpctx_t **ctx, char *ip, uint32_t port)
     return 0;
 }
 
-static int prepare_tcp_ctx(tcpctx_t **ctx, char *ip, uint32_t port)
+static int prepare_tcp_ctx(transportctx_t **ctx, char *ip, uint32_t port)
 {
     if (!ctx) {
         errorf("[MAIN] tcp ctx null");
         return -1;
     }
 
-    *ctx = calloc(1, sizeof(tcpctx_t));
+    *ctx = calloc(1, sizeof(transportctx_t));
     if (!*ctx) {
         errorf("mem alloc failed");
         return -1;
@@ -243,6 +242,57 @@ static int prepare_tcp_ctx(tcpctx_t **ctx, char *ip, uint32_t port)
 
     (*ctx)->port = port;
     strncpy((*ctx)->ip, ip, sizeof((*ctx)->ip) - 1);
+    return 0;
+}
+
+static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
+{
+    for (int i = 0; i < protocfg->cfg_size; ++i) {
+        stream_config_t *stream = &protocfg->streams[i];
+        transportctx_t *protoctx = stream->stream_ctx;
+
+        errorf("tcp cfg nu: %d", i);
+
+        single_mode_cfg_t *cfg = calloc(1, sizeof(*cfg));
+        if (!cfg) {
+            errorf("mem allocation failed");
+            return -1;
+        }
+
+        memset(cfg, 0, sizeof(*cfg));
+
+        cfg->protocol = stream->stream_type;
+        cfg->ctx = stream->stream_ctx;
+        cfg->data = str2hex(stream->data, &cfg->datalen);
+        if (!cfg->data) {
+            errorf("Data parsing failed");
+            return -1;
+        }
+        cfg->count = stream->count;
+        cfg->interval_ms = stream->interval_ms;
+
+        *thread_data = calloc(1, sizeof(*thread_data));
+        if (!(*thread_data)) {
+            errorf("mem alloc failed");
+            return -1;
+        }
+
+        if (pthread_create(*thread_data, NULL, single_mode_run, cfg)) {
+            errorf("thread create failed");
+            return -1;
+        }
+        infof("Thread created, id: %u, port: %u, ip: %s", (unsigned int)**thread_data, protoctx->port, protoctx->ip);
+        struct cfg_node *cnode = calloc(1, sizeof(*cnode));
+        if (!cnode) {
+            errorf("mem alloc failed");
+            return -1;
+        }
+
+        cnode->cfg = cfg;
+        cnode->thread_data = *thread_data;
+        TAILQ_INSERT_TAIL(&g_configs, cnode, node);
+    }
+
     return 0;
 }
 
@@ -293,8 +343,8 @@ int main(int argc, char *argv[])
     int ret = EXIT_FAILURE;
     int cfg_from_file = 0;
     ethctx_t *ectx = NULL;
-    tcpctx_t *tctx = NULL;
-    udpctx_t *uctx = NULL;
+    transportctx_t *tctx = NULL;
+    transportctx_t *uctx = NULL;
     unsigned char dstmac[ETH_ALEN] = {0};
     char ifname[IFNAMSIZ] = {0};
     char ip[32] = {0};
@@ -504,110 +554,29 @@ int main(int argc, char *argv[])
     config_t tcpcfg;
     config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
 
-    for (int i = 0; i < tcpcfg.cfg_size; ++i) {
-        stream_config_t *stream = &tcpcfg.streams[i];
-        tcpctx_t *tcpctx = stream->stream_ctx;
+    errorf("cfg size = %d", tcpcfg.cfg_size);
 
-        errorf("tcp cfg nu: %d", i);
+    if (create_transport_threads(&tcpcfg, &thread_data)) {
+        goto bail;
+    }
 
-        single_mode_cfg_t *cfg = calloc(1, sizeof(*cfg));
-        if (!cfg) {
-            errorf("mem allocation failed");
-            goto bail;
-        }
+    int udp_stream_size;
+    config_t udpcfg;
+    config_get_stream(&udpcfg, UDP, &udp_stream_size);
 
-        memset(cfg, 0, sizeof(*cfg));
+    errorf("UDP cfg size = %d", udpcfg.cfg_size);
 
-        cfg->protocol = TCP;
-        cfg->ctx = stream->stream_ctx;
-        cfg->data = str2hex(stream->data, &cfg->datalen);
-        if (!cfg->data) {
-            errorf("Data parsing failed");
-            goto bail;
-        }
-        cfg->count = stream->count;
-        cfg->interval_ms = stream->interval_ms;
-
-        thread_data = calloc(1, sizeof(*thread_data));
-        if (!thread_data) {
-            errorf("mem alloc failed");
-            goto bail;
-        }
-        // fill_runtime_config(cfg, cfg->ctx, cfg->protocol, cfg->interval_ms, cfg->count, cfg->data, cfg->datalen);
-
-        ret = pthread_create(thread_data, NULL, single_mode_run, cfg);
-        if (ret) {
-            errorf("thread create failed");
-            goto bail;
-        }
-        infof("Thread created, id: %u, port: %u, ip: %s", (unsigned int)*thread_data, tcpctx->port, tcpctx->ip);
-        struct cfg_node *cnode = calloc(1, sizeof(*cnode));
-        if (!cnode) {
-            errorf("mem alloc failed");
-            ret = -1;
-            goto bail;
-        }
-
-        cnode->cfg = cfg;
-        cnode->thread_data = thread_data;
-        TAILQ_INSERT_TAIL(&g_configs, cnode, node);
+    if (create_transport_threads(&udpcfg, &thread_data)) {
+        goto bail;
     }
 
     if (join_all_threads()) {
         goto bail;
     }
 
-    // void *ethhandle = sender_dispatcher[ETH].worker->create(&ectx);
-    // if (!ethhandle) {
-    //     errorf("ETH Handle NULL, exit");
-    //     goto bail;
-    // }
-
-    // void *udphandle = sender_dispatcher[UDP].worker->create(&uctx);
-    // if (!udphandle) {
-    //     errorf("UDP Handle NULL, exit");
-    //     goto bail;
-    // }
-
-    
-    
-
-    // while (1)
-    // {
-    //     ts_begin = gettime_ms();
-    //     fprintf(stderr, "ts_begin: %llu\n", ts_begin);
-        
-    //     fprintf(stderr, "Sending data: ");
-    //     dump_bytes_hex(single_cfg.data, single_cfg.datalen);
-
-    //     if (sender_dispatcher[ETH].worker->send(ethhandle, data, datalen)) {
-    //         errorf("failed to send raw eth packet");
-    //         goto bail;
-    //     }
-
-    //     if (sender_dispatcher[UDP].worker->send(udphandle, data, datalen)) {
-    //         errorf("SEND UDP FAIL");
-    //     }
-
-    //     if (sender_dispatcher[TCP].worker->send(tcphandle, data, datalen)) {
-    //         errorf("SEND TCP FAIL");
-    //     }
-
-    //     ts_end = gettime_ms();
-    //     fprintf(stderr, "ts_end: %llu\n", ts_end);
-    //     fprintf(stderr, "delta: %llu ms, cnt: %u\n\n", ts_end - ts_begin, ++cnt);
-
-    //     usleep(interval_in_ms * MSEC);
-    // }
-
-
     ret = EXIT_SUCCESS;
 bail:
-    cleanup_main_thread();    
-    // sender_dispatcher[ETH].worker->destroy(ethhandle);
-    // sender_dispatcher[UDP].worker->destroy(udphandle);
-    // sender_dispatcher[TCP].worker->destroy(tcphandle);
-    // config_destroy();
+    cleanup_main_thread();
 
     return ret;
 }

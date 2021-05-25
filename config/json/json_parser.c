@@ -8,20 +8,23 @@
 #include "tcp/tcpsend.h"
 #include "utils/utils.h"
 
-static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_size)
+static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_type, config_t *cfg, int *stream_size)
 {
     int ret = -1;
     FILE *fp = NULL;
     char buffer[2048] = {0};
     int streams_len = 0;
-    int tcp_streams_len = 0;
+    int proto_streams_len = 0;
     struct {
         json_object *core;
         json_object *streams;
         json_object *stream_elem;
-        json_object *tcp;
-        json_object *tcp_elem;
+        json_object *proto;
+        json_object *proto_elem;
     } json = {NULL, NULL, NULL, NULL, NULL};
+
+    const char *stream_name = (stream_type == TCP) ? "tcp" : "udp";
+
 
     debugf("[JSON] Enter");
 
@@ -62,14 +65,14 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
         
         json.stream_elem = json_object_array_get_idx(json.streams, (size_t)i);
 
-        json.tcp = json_object_object_get(json.stream_elem, "tcp");
-        if (!json.tcp) {
-            errorf("[JSON] tcp field cannot be found");
+        json.proto = json_object_object_get(json.stream_elem, stream_name);
+        if (!json.proto) {
+            errorf("[JSON] proto field cannot be found");
             continue;
         }
 
-        cfg->cfg_size = json_object_array_length(json.tcp);
-        errorf("[TCP] tcp stram len = %u", cfg->cfg_size);
+        cfg->cfg_size = json_object_array_length(json.proto);
+        errorf("[proto] stram len = %u", cfg->cfg_size);
 
         if (!cfg->cfg_size) {
             cfg->streams = NULL;
@@ -83,47 +86,45 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
         }
 
         for (int j = 0; j < cfg->cfg_size; ++j) {
-            json.tcp_elem = json_object_array_get_idx(json.tcp, (size_t)j);
+            json.proto_elem = json_object_array_get_idx(json.proto, (size_t)j);
 
-
-
-            cfg->streams[j].stream_type = TCP;
-            const char *data = json_object_get_string(json_object_object_get(json.tcp_elem, "data"));
+            cfg->streams[j].stream_type = stream_type;
+            const char *data = json_object_get_string(json_object_object_get(json.proto_elem, "data"));
             if (!data) {
                 errorf("[JSON] get stream data failed");
                 goto bail;
             }
             memcpy(cfg->streams[j].data, data, strlen(data));
 
-            tcpctx_t *tcpctx = calloc(1, sizeof(tcpctx_t));
-            if (!tcpctx) {
+            transportctx_t *protoctx = calloc(1, sizeof(transportctx_t)); // udp or tcp does not matter since the structure is the same.
+            if (!protoctx) {
                 errorf("[JSON] mem allocation failed");
                 goto bail;
             }
 
-            const char *ip = json_object_get_string(json_object_object_get(json.tcp_elem, "ip"));
+            const char *ip = json_object_get_string(json_object_object_get(json.proto_elem, "ip"));
             if (!ip) {
                 errorf("[JSON] get stream IP failed");
                 goto bail;
             }
             infof("iplen: %lu, ip=%s\n", strlen(ip), ip);
-            memcpy(tcpctx->ip, ip, strlen(ip));
-            infof("tcpctx->ipiplen: %lu, tcpctx->ipip=%s\n", strlen(tcpctx->ip), tcpctx->ip);
+            memcpy(protoctx->ip, ip, strlen(ip));
+            infof("protoctx->ipiplen: %lu, protoctx->ipip=%s\n", strlen(protoctx->ip), protoctx->ip);
 
-            const char *port = json_object_get_string(json_object_object_get(json.tcp_elem, "port"));
+            const char *port = json_object_get_string(json_object_object_get(json.proto_elem, "port"));
             if (!port) {
                 errorf("[JSON] get stream port failed");
                 goto bail;
             }
-            tcpctx->port = atoi(port);
+            protoctx->port = atoi(port);
 
-            const char *count = json_object_get_string(json_object_object_get(json.tcp_elem, "count"));
+            const char *count = json_object_get_string(json_object_object_get(json.proto_elem, "count"));
             cfg->streams[j].count = (!count) ? COUNT_DEFAULT : atoi(count);
 
-            const char *interval_ms = json_object_get_string(json_object_object_get(json.tcp_elem, "interval_ms"));
+            const char *interval_ms = json_object_get_string(json_object_object_get(json.proto_elem, "interval_ms"));
             cfg->streams[j].interval_ms = (!interval_ms) ? INTERVAL_MS_DEFAULT: atoi(interval_ms);
 
-            cfg->streams[j].stream_ctx = tcpctx;
+            cfg->streams[j].stream_ctx = protoctx;
         }
     }
 
@@ -143,6 +144,18 @@ bail:
     return ret;
 }
 
+static int json_get_stream(const char *filename, streamtype_e stream_type, config_t *cfg, int *stream_size)
+{
+    switch(stream_type)
+    {
+        case TCP:   return json_get_tcp_udp_stream(filename, TCP, cfg, stream_size);
+        case UDP:   return json_get_tcp_udp_stream(filename, UDP, cfg, stream_size);
+        default:    return json_get_tcp_udp_stream(filename, TCP, cfg, stream_size);
+    }
+
+    return 0;
+}
+
 config_worker_t json_worker = {
-    .get_tcp_stream = json_get_tcp_stream,
+    .get_stream = json_get_stream,
 };

@@ -13,7 +13,7 @@
 
 typedef struct udp_priv {
     int handle;
-    udpctx_t addr;
+    transportctx_t addr;
 } udp_priv_t;
 
 static int udp_open(void)
@@ -23,7 +23,7 @@ static int udp_open(void)
 
 void *udp_create(void *ctx)
 {
-    udpctx_t *addr = ctx;
+    transportctx_t *addr = ctx;
     udp_priv_t *private = NULL;
     
     int fd = udp_open();
@@ -53,7 +53,7 @@ int udp_send(void *priv, uint8_t *data, uint32_t len)
     int sockfd = private->handle;
     struct sockaddr_in si;
     int ret = 0;
-    udpctx_t *udpctx = &private->addr;
+    transportctx_t *udpctx = &private->addr;
 
     debugf("[UDP] ENTER");
 

@@ -20,7 +20,7 @@
 typedef struct tcp_priv {
     int handle;
     uint32_t flags;
-    tcpctx_t addr;
+    transportctx_t addr;
 } tcp_priv_t;
 
 struct sigaction sigpipe_action = {.sa_handler = SIG_IGN};
@@ -115,7 +115,7 @@ bail:
 
 void *tcp_create(void *ctx)
 {
-    tcpctx_t *addr = ctx;
+    transportctx_t *addr = ctx;
     tcp_priv_t *private = NULL;
 
     fprintf(stderr, "TCP ctx: %p\n", ctx);
@@ -184,7 +184,7 @@ int tcp_send(void *priv, uint8_t *data, uint32_t len)
     int sockfd = private->handle;
     struct sockaddr_in si;
     int ret = 0;
-    struct tcpctx *tcpx = &private->addr;
+    transportctx_t *tcpx = &private->addr;
 
     debugf("[TCP] ENTER");
 

@@ -59,14 +59,7 @@ static void config_stream_destroy(config_t *cfg)
 
 int config_get_stream(config_t *cfg_out, streamtype_e stream_type, int *stream_size)
 {
-    switch (stream_type)
-    {
-    case TCP:
-        g_config.worker->get_tcp_stream(g_config.filename, cfg_out, stream_size);
-        break;
-    default:
-        break;
-    }
+    g_config.worker->get_stream(g_config.filename, stream_type, cfg_out, stream_size);
 
     struct node *cfg_node = calloc(1, sizeof(*cfg_node));
     if (!cfg_node) {
@@ -77,7 +70,6 @@ int config_get_stream(config_t *cfg_out, streamtype_e stream_type, int *stream_s
     }
 
     cfg_node->cfg = cfg_out;
-    // infof("[CONFIG] Inserting config to queue, %p", cfg_out->streams);
     TAILQ_INSERT_TAIL(&g_config.configq, cfg_node, nodes);
     return 0;
 }

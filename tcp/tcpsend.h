@@ -3,10 +3,7 @@
 
 #include <stdint.h>
 
-typedef struct tcpctx {
-    char ip[32];
-    int port;
-} tcpctx_t;
+#include "utils/utils.h"
 
 struct sender tcpsender;
 
