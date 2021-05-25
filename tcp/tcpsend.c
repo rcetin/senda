@@ -30,31 +30,30 @@ static int tcp_open(void)
     return socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_IP);
 }
 
-static int tcp_connect(tcp_priv_t *priv)
+static int tcp_connect(int fd, char *ip, uint32_t port)
 {
     struct sockaddr_in si;
-    tcpctx_t *tcpx = &priv->addr;
     int ret = 0;
     int arg = 0;
 
     memset((char *) &si, 0, sizeof(si));
 	si.sin_family = AF_INET;
-	si.sin_port = htons(tcpx->port);
+	si.sin_port = htons(port);
 	
-    if (inet_aton(tcpx->ip, &si.sin_addr) == 0) {
-        errorf("[TCP] invalid ip addr: %s", tcpx->ip);
+    if (inet_aton(ip, &si.sin_addr) == 0) {
+        errorf("[TCP] invalid ip addr: %s", ip);
         ret = -1;
         goto bail;
     }
 
-    arg = fcntl(priv->handle, F_GETFL, NULL);
+    arg = fcntl(fd, F_GETFL, NULL);
     if (arg < 0) {
         errorf("[TCP] GETFL failed");
         ret = -1;
         goto bail;
     }
 
-    if (connect(priv->handle , (struct sockaddr *)&si , sizeof(si)) < 0) {
+    if (connect(fd , (struct sockaddr *)&si , sizeof(si)) < 0) {
         if (errno == EINPROGRESS) {
             struct timeval tv;
             fd_set tcpwrset;
@@ -62,10 +61,10 @@ static int tcp_connect(tcp_priv_t *priv)
             tv.tv_sec = 15;
             tv.tv_usec = 0;
             FD_ZERO(&tcpwrset);
-            FD_SET(priv->handle, &tcpwrset);
+            FD_SET(fd, &tcpwrset);
 
 
-            ret = select(priv->handle + 1, NULL, &tcpwrset, NULL, &tv);
+            ret = select(fd + 1, NULL, &tcpwrset, NULL, &tv);
             if (ret < 0) {
                 errorf("[TCP] select failed");
                 goto bail;
@@ -79,12 +78,12 @@ static int tcp_connect(tcp_priv_t *priv)
             }
 
             if (ret == 1) {
-                if (FD_ISSET(priv->handle, &tcpwrset)) {
+                if (FD_ISSET(fd, &tcpwrset)) {
                     int so_error;
                     socklen_t len = sizeof(so_error);
                     ret = 0;
 
-                    if (getsockopt(priv->handle, SOL_SOCKET, SO_ERROR, &so_error, &len)) {
+                    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &len)) {
                         errorf("[TCP] getsockopt failed");
                         ret = -1;
                         goto bail;
@@ -98,7 +97,7 @@ static int tcp_connect(tcp_priv_t *priv)
                     }
 
                     arg &= ~O_NONBLOCK;
-                    if (fcntl(priv->handle, F_SETFL, arg)) {
+                    if (fcntl(fd, F_SETFL, arg)) {
                         errorf("[TCP] SETFL failed");
                         ret = -1;
                         goto bail;
@@ -127,6 +126,16 @@ void *tcp_create(void *ctx)
         return NULL;
     }
 
+    // Set a signal handler for SIGPIPE
+    if (sigaction(SIGPIPE, &sigpipe_action, NULL)) {
+        errorf("[TCP] Sigpipe handler set is failed");
+        goto bail;
+    }
+
+    if (tcp_connect(fd, addr->ip, addr->port)) {
+        goto bail;
+    }
+
     private = calloc(1, sizeof(*private));
     if (!private) {
         errorf("[TCP] no memory for tcp handle");
@@ -137,17 +146,7 @@ void *tcp_create(void *ctx)
     strncpy(private->addr.ip, addr->ip, sizeof(private->addr.ip) - 1);
     private->addr.port = addr->port;
 
-    // Set a signal handler for SIGPIPE
-    if (sigaction(SIGPIPE, &sigpipe_action, NULL)) {
-        errorf("[TCP] Sigpipe handler set is failed");
-        goto bail;
-    }
-
-    if (tcp_connect(private)) {
-        goto bail;
-    }
-
-    infof("[TCP] handle created successfully. fd: %u", fd);
+    infof("[TCP] handle created successfully. fd: %u, ip: %s, port: %u", fd, private->addr.ip, private->addr.port);
     return private;
 bail:
     SFREE(private);
@@ -168,7 +167,7 @@ static int tcp_handle_brokenpipe(void *priv)
     }
 
     private->handle = fd;
-    ret = tcp_connect(private);
+    ret = tcp_connect(private->handle, private->addr.ip, private->addr.port);
     if (ret) {
         errorf("[TCP][Broken Pipe] Reconnection is failed.");
         return -1;
@@ -219,9 +218,11 @@ void tcp_destroy(void *priv)
 {
     tcp_priv_t *private = priv;
     if (!private) {
+        errorf("[TCP] private null");
         return;
     }
 
+    infof("[TCP] destroy: %u", private->handle);
     close(private->handle);
     SFREE(priv);
     priv = NULL;

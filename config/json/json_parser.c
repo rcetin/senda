@@ -13,12 +13,15 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
     int ret = -1;
     FILE *fp = NULL;
     char buffer[2048] = {0};
-    int stream_len;
+    int streams_len = 0;
+    int tcp_streams_len = 0;
     struct {
         json_object *core;
         json_object *streams;
         json_object *stream_elem;
-    } json = {NULL, NULL, NULL};
+        json_object *tcp;
+        json_object *tcp_elem;
+    } json = {NULL, NULL, NULL, NULL, NULL};
 
     debugf("[JSON] Enter");
 
@@ -46,77 +49,82 @@ static int json_get_tcp_stream(const char *filename, config_t *cfg, int *stream_
         goto bail;
     }
 
-    json.streams = json_object_object_get(json.core, "stream");
+    json.streams = json_object_object_get(json.core, "streams");
     if (!json.streams) {
         errorf("[JSON] parsing error");
         goto bail;
     }
 
-    stream_len = json_object_array_length(json.streams);
+    streams_len = json_object_array_length(json.streams);
+    errorf("[TCP] streams len = %u", streams_len);
 
-    for (int i = 0; i < stream_len; ++i) {
+    for (int i = 0; i < streams_len; ++i) {
+        
         json.stream_elem = json_object_array_get_idx(json.streams, (size_t)i);
-        const char *type = json_object_get_string(json_object_object_get(json.stream_elem, "type"));
-        if (strncmp(type, "tcp", 3)) {
+
+        json.tcp = json_object_object_get(json.stream_elem, "tcp");
+        if (!json.tcp) {
+            errorf("[JSON] tcp field cannot be found");
             continue;
         }
 
-        cfg->cfg_size++;
+        cfg->cfg_size = json_object_array_length(json.tcp);
+        errorf("[TCP] tcp stram len = %u", cfg->cfg_size);
 
-        stream_config_t *cfg_ptr = realloc(cfg->streams, cfg->cfg_size * sizeof(stream_config_t));
-        if (!cfg_ptr) {
+        if (!cfg->cfg_size) {
+            cfg->streams = NULL;
+            goto bail;
+        }
+
+        cfg->streams = calloc(1, cfg->cfg_size * sizeof(stream_config_t));
+        if (!cfg->streams) {
             errorf("[JSON] mem allocation failed");
             goto bail;
         }
-        memset(cfg_ptr + (cfg->cfg_size - 1), 0, sizeof(stream_config_t));
 
-        cfg->streams = cfg_ptr;
+        for (int j = 0; j < cfg->cfg_size; ++j) {
+            json.tcp_elem = json_object_array_get_idx(json.tcp, (size_t)j);
 
-        cfg->streams->stream_type = TCP;
-        const char *data = json_object_get_string(json_object_object_get(json.stream_elem, "data"));
-        if (!data) {
-            errorf("[JSON] get stream data failed");
-            goto bail;
+
+
+            cfg->streams[j].stream_type = TCP;
+            const char *data = json_object_get_string(json_object_object_get(json.tcp_elem, "data"));
+            if (!data) {
+                errorf("[JSON] get stream data failed");
+                goto bail;
+            }
+            memcpy(cfg->streams[j].data, data, strlen(data));
+
+            tcpctx_t *tcpctx = calloc(1, sizeof(tcpctx_t));
+            if (!tcpctx) {
+                errorf("[JSON] mem allocation failed");
+                goto bail;
+            }
+
+            const char *ip = json_object_get_string(json_object_object_get(json.tcp_elem, "ip"));
+            if (!ip) {
+                errorf("[JSON] get stream IP failed");
+                goto bail;
+            }
+            infof("iplen: %lu, ip=%s\n", strlen(ip), ip);
+            memcpy(tcpctx->ip, ip, strlen(ip));
+            infof("tcpctx->ipiplen: %lu, tcpctx->ipip=%s\n", strlen(tcpctx->ip), tcpctx->ip);
+
+            const char *port = json_object_get_string(json_object_object_get(json.tcp_elem, "port"));
+            if (!port) {
+                errorf("[JSON] get stream port failed");
+                goto bail;
+            }
+            tcpctx->port = atoi(port);
+
+            const char *count = json_object_get_string(json_object_object_get(json.tcp_elem, "count"));
+            cfg->streams[j].count = (!count) ? COUNT_DEFAULT : atoi(count);
+
+            const char *interval_ms = json_object_get_string(json_object_object_get(json.tcp_elem, "interval_ms"));
+            cfg->streams[j].interval_ms = (!interval_ms) ? INTERVAL_MS_DEFAULT: atoi(interval_ms);
+
+            cfg->streams[j].stream_ctx = tcpctx;
         }
-        memcpy(cfg->streams->data, data, strlen(data));
-
-        tcpctx_t *tcpctx = calloc(1, sizeof(tcpctx_t));
-        if (!tcpctx) {
-            errorf("[JSON] mem allocation failed");
-            goto bail;
-        }
-        memset(tcpctx, 0, sizeof(tcpctx_t));
-        const char *ip = json_object_get_string(json_object_object_get(json.stream_elem, "ip"));
-        if (!ip) {
-            errorf("[JSON] get stream IP failed");
-            goto bail;
-        }
-        infof("iplen: %lu, ip=%s\n", strlen(ip), ip);
-        memcpy(tcpctx->ip, ip, strlen(ip));
-        infof("tcpctx->ipiplen: %lu, tcpctx->ipip=%s\n", strlen(tcpctx->ip), tcpctx->ip);
-
-        const char *port = json_object_get_string(json_object_object_get(json.stream_elem, "port"));
-        if (!port) {
-            errorf("[JSON] get stream port failed");
-            goto bail;
-        }
-        tcpctx->port = atoi(port);
-
-        const char *count = json_object_get_string(json_object_object_get(json.stream_elem, "count"));
-        if (!count) {
-            cfg->streams->count = COUNT_DEFAULT;
-            goto bail;
-        }
-        cfg->streams->count = atoi(count);
-
-        const char *interval_ms = json_object_get_string(json_object_object_get(json.stream_elem, "interval_ms"));
-        if (!interval_ms) {
-            cfg->streams->interval_ms = INTERVAL_MS_DEFAULT;
-            goto bail;
-        }
-        cfg->streams->interval_ms = atoi(interval_ms);
-
-        cfg->streams->stream_ctx = tcpctx;
     }
 
     // dump file 

@@ -20,10 +20,28 @@
 #include "config/config.h"
 #include "main.h"
 
+typedef struct single_mode_cfg {
+    streamtype_e protocol;
+    uint8_t *data;
+    uint32_t datalen;
+    uint32_t interval_ms;
+    uint32_t count;
+    void *ctx;
+    void *sender_handle;
+} single_mode_cfg_t;
+
+struct cfg_node {
+    TAILQ_ENTRY(cfg_node) node;
+    single_mode_cfg_t *cfg;
+    pthread_t *thread_data;
+};
+TAILQ_HEAD(configq, cfg_node);
+
 static void print_help(void);
 static void show_current_opts(void);
 static void destroy_runtime_configs(void);
 static void cleanup_main_thread(void);
+static void destroy_single_config(struct cfg_node *cnode);
 
 static streamtype_e get_protocol_from_string(const char *str)
 {
@@ -71,23 +89,6 @@ static struct option long_options[] = {
     {0,         0,                 0,  0 }
 };
 
-typedef struct single_mode_cfg {
-    streamtype_e protocol;
-    uint8_t *data;
-    uint32_t datalen;
-    uint32_t interval_ms;
-    uint32_t count;
-    void *ctx;
-    void *sender_handle;
-} single_mode_cfg_t;
-
-struct cfg_node {
-    TAILQ_ENTRY(cfg_node) node;
-    single_mode_cfg_t *cfg;
-    pthread_t *thread_data;
-};
-TAILQ_HEAD(configq, cfg_node);
-
 struct configq g_configs;
 
 struct global_sender {
@@ -108,15 +109,21 @@ static void sigint_handler(int sig)
     int ret;
     void *sender_handle = NULL;
 
+    infof("SIGNAL came!!");
+
     TAILQ_FOREACH(cnode, &g_configs, node) {
         ret = pthread_cancel(*cnode->thread_data);
         if (ret) {
-            errorf("[SIGINT] thread cancel failed");
+            errorf("[SIGINT] thread cancel failed for: %u, err: %d", (unsigned int)*cnode->thread_data, ret);
+        } else {
+            errorf("[SIGINT] thread cancel success for: %u, err: %d", (unsigned int)*cnode->thread_data, ret);
         }
 
         ret = pthread_join(*cnode->thread_data, NULL);
         if (ret) {
-            errorf("thread join failed");
+            errorf("thread join failed for: %u, err: %d", (unsigned int)*cnode->thread_data, ret);
+        } else {
+            errorf("thread join success for: %u, err: %d", (unsigned int)*cnode->thread_data, ret);
         }
 
         sender_handle = cnode->cfg->sender_handle;
@@ -137,13 +144,19 @@ static int join_all_threads(void)
 {
     int ret = 0;
 
-    struct cfg_node *cnode;
-    TAILQ_FOREACH(cnode, &g_configs, node) {
+    struct cfg_node *cnode, *tnode;
+    TAILQ_FOREACH_SAFE(cnode, &g_configs, node, tnode) {
+        infof("Joining to thread: %u", (unsigned int)*(cnode)->thread_data);
         ret = pthread_join(*(cnode)->thread_data, NULL);
         if (ret) {
             errorf("thread join failed");
             goto bail;
         }
+
+        infof("Joining succeed: %u", (unsigned int)*(cnode)->thread_data);        
+
+        destroy_single_config(cnode);
+        // TAILQ_REMOVE(&g_configs, cnode, node);
     }
 
 bail:
@@ -254,16 +267,21 @@ static void cleanup_runtime_config(single_mode_cfg_t *cfg)
     SFREE(cfg->ctx);
 }
 
+static void destroy_single_config(struct cfg_node *cnode)
+{
+    cleanup_runtime_config(cnode->cfg);
+    SFREE(cnode->thread_data);
+    SFREE(cnode->cfg);
+    TAILQ_REMOVE(&g_configs, cnode, node);
+    SFREE(cnode);
+}
+
 static void destroy_runtime_configs(void)
 {
     struct cfg_node *cnode, *tnode;
 
     TAILQ_FOREACH_SAFE(cnode, &g_configs, node, tnode) {
-        cleanup_runtime_config(cnode->cfg);
-        SFREE(cnode->thread_data);
-        SFREE(cnode->cfg);
-        TAILQ_REMOVE(&g_configs, cnode, node);
-        SFREE(cnode);
+        destroy_single_config(cnode);
     }
 }
 
@@ -488,6 +506,9 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < tcpcfg.cfg_size; ++i) {
         stream_config_t *stream = &tcpcfg.streams[i];
+        tcpctx_t *tcpctx = stream->stream_ctx;
+
+        errorf("tcp cfg nu: %d", i);
 
         single_mode_cfg_t *cfg = calloc(1, sizeof(*cfg));
         if (!cfg) {
@@ -519,7 +540,7 @@ int main(int argc, char *argv[])
             errorf("thread create failed");
             goto bail;
         }
-
+        infof("Thread created, id: %u, port: %u, ip: %s", (unsigned int)*thread_data, tcpctx->port, tcpctx->ip);
         struct cfg_node *cnode = calloc(1, sizeof(*cnode));
         if (!cnode) {
             errorf("mem alloc failed");

@@ -60,10 +60,11 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
         return NULL;
     }
 
+    errorf("Data: %s", str);
     for (uint32_t i = 0; i < len; ++i, str += 2) {
         sscanf(str, "%02x", &tmp);
         elem[i] = tmp;
-        // errorf("%p->%d:%02x", (void *)&elem[i], i, elem[i]);
+        errorf("%p->%d:%02x", (void *)&elem[i], i, elem[i]);
     }
         
     *datalen = len;

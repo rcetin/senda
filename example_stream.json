@@ -1,10 +1,48 @@
 {
-  "stream":[{
-  	"type": "tcp",
-  	"data":"AABBCCCSDASDADSASDASD",
-  	"ip":"0.0.0.0",
-	"port": 3333,
-	"count": 11,
-	"interval_ms": 1000,
-  }]
+  "streams":[
+	  
+	{
+		"tcp" : [
+			{
+				"data":"AAAAAAAAAAAAAAAAAAAAAAAAA",
+				"ip":"0.0.0.0",
+			  "port": 1111,
+			  "count": 33,
+			  "interval_ms": 1000,
+			},
+			{
+				"data":"BBBBBBBBBBBBBBBBBBBBBBBBBBB",
+				"ip":"0.0.0.0",
+			  "port": 2222,
+			  "count": 33,
+			  "interval_ms": 2000,
+			},
+			{
+				"data":"CCCCCCCCCCCCCCCCCCCCCCCCCC",
+				"ip":"0.0.0.0",
+			  "port": 3333,
+			  "interval_ms": 3000,
+			},
+			{
+				"data":"DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDd",
+				"ip":"192.168.111.111",
+			  "port": 4444,
+			}
+		]
+	},
+	{
+		"udp" : [
+			{
+				"data":"AABBCCCSDASDADSASDASD",
+				"ip":"0.0.0.0",
+			  "port": 3333,
+			  "count": 11,
+			  "interval_ms": 1000,
+			}
+		]
+	}
+	
+	
+	
+	]
 }
