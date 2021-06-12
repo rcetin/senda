@@ -97,7 +97,7 @@ struct global_sender {
     void *ctx;
 };
 
-struct global_sender sender_dispatcher[TOTAL_SENDER] = {
+struct global_sender sender_dispatcher[MAX_STREAM_TYPE] = {
     {.name = "udp", .worker = &udpsender},
     {.name = "eth", .worker = &ethsender},
     {.name = "tcp", .worker = &tcpsender},
@@ -175,12 +175,12 @@ static void *single_mode_run(void *arg)
     }
 
     cfg->sender_handle = sender_handle;
-    uint32_t sleep_duration = (cfg->interval_ms) ? (cfg->interval_ms * MSEC) : (100 * USEC);
+    uint32_t sleep_duration = (cfg->interval_ms) ? (cfg->interval_ms * MSEC) : 0;
     while (loop || cfg->count--) {
         infof("[Single Mode] %s", get_localtime());
         sender_dispatcher[cfg->protocol].worker->send(sender_handle, cfg->data, cfg->datalen);
         usleep(sleep_duration);
-        fprintf(stderr, "\n");
+        infof("----------------------------------------------");
     }
     sender_dispatcher[cfg->protocol].worker->destroy(sender_handle);
     ret = 0;
@@ -550,23 +550,33 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    int tcp_stream_size;
-    config_t tcpcfg;
-    config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
+    // int tcp_stream_size;
+    // config_t tcpcfg;
+    // config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
 
-    errorf("cfg size = %d", tcpcfg.cfg_size);
+    // errorf("TCP cfg size = %d", tcpcfg.cfg_size);
 
-    if (create_transport_threads(&tcpcfg, &thread_data)) {
-        goto bail;
-    }
+    // if (create_transport_threads(&tcpcfg, &thread_data)) {
+    //     goto bail;
+    // }
 
-    int udp_stream_size;
-    config_t udpcfg;
-    config_get_stream(&udpcfg, UDP, &udp_stream_size);
+    // int udp_stream_size;
+    // config_t udpcfg;
+    // config_get_stream(&udpcfg, UDP, &udp_stream_size);
 
-    errorf("UDP cfg size = %d", udpcfg.cfg_size);
+    // errorf("UDP cfg size = %d", udpcfg.cfg_size);
 
-    if (create_transport_threads(&udpcfg, &thread_data)) {
+    // if (create_transport_threads(&udpcfg, &thread_data)) {
+    //     goto bail;
+    // }
+
+    int eth_stream_size;
+    config_t ethcfg;
+    config_get_stream(&ethcfg, ETH, &eth_stream_size);
+
+    errorf("ETH cfg size = %d", ethcfg.cfg_size);
+
+    if (create_transport_threads(&ethcfg, &thread_data)) {
         goto bail;
     }
 

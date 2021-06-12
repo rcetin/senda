@@ -11,7 +11,7 @@ typedef enum streamtype_e {
     UDP,
     ETH,
     TCP,
-    TOTAL_SENDER,
+    MAX_STREAM_TYPE,
 } streamtype_e;
 
 struct sender {

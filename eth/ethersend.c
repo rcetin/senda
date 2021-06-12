@@ -105,7 +105,7 @@ int eth_send(void *priv, uint8_t *data, uint32_t len)
         goto bail;
     }
 
-    infof("[ETH] send success. [%u] bytes, ["ETHER_STR"]->["ETHER_STR"]", ret, ETHER_ADDR(if_mac.ifr_hwaddr.sa_data), ETHER_ADDR(ectx->dstmac));
+    infof("[ETH] send success. [%u] bytes, ["ETHER_STR"]->["ETHER_STR"]", ret, ETHER_ADDR(eh->ether_shost), ETHER_ADDR(ectx->dstmac));
     ret = 0;
 bail:
     debugf("[ETH] Returning, ret: %d", ret);

@@ -7,8 +7,73 @@
 #include "debug/debug.h"
 #include "tcp/tcpsend.h"
 #include "utils/utils.h"
+#include "eth/ethersend.h"
 
-static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_type, config_t *cfg, int *stream_size)
+static void dump_cfg(stream_config_t *cfg)
+{
+    fprintf(stderr, "data: %s\n", cfg->data);
+    fprintf(stderr, "count: %u\n", cfg->count);
+    fprintf(stderr, "interval_ms: %u\n", cfg->interval_ms);
+}
+
+static int json_get_tcp_udp_info(json_object *object, void *outctx)
+{
+    transportctx_t *ctx = NULL;
+
+    if (!outctx) {
+        return -1;
+    }
+
+    ctx = outctx;
+    
+    const char *ip = json_object_get_string(json_object_object_get(object, "ip"));
+    if (!ip) {
+        errorf("[JSON] get stream IP failed");
+        return -1;
+    }
+
+    const char *port = json_object_get_string(json_object_object_get(object, "port"));
+    if (!port) {
+        errorf("[JSON] get stream port failed");
+        return -1;
+    }
+
+    memcpy(ctx->ip, ip, strlen(ip));
+    ctx->port = atoi(port);
+
+    return 0;
+}
+
+static int json_get_eth_info(json_object *object, void *outctx)
+{
+    ethctx_t *ctx = NULL;
+
+    if (!outctx) {
+        return -1;
+    }
+
+    ctx = outctx;
+    
+    const char *ifname = json_object_get_string(json_object_object_get(object, "ifname"));
+    if (!ifname) {
+        errorf("[JSON] get ifname failed");
+        return -1;
+    }
+
+    const char *dstmac = json_object_get_string(json_object_object_get(object, "dstmac"));
+    if (!dstmac) {
+        errorf("[JSON] get dstmac failed");
+        return -1;
+    }
+
+    strncpy(ctx->ifname, ifname, sizeof(ctx->ifname) - 1);
+    str2mac(dstmac, ctx->dstmac);
+    ctx->ptype = ARP; // @TODO: more packet types dynamically
+
+    return 0;
+}
+
+static int json_get_stream(const char *filename, streamtype_e stream_type, config_t *cfg, int *stream_size)
 {
     int ret = -1;
     FILE *fp = NULL;
@@ -22,11 +87,13 @@ static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_typ
         json_object *proto;
         json_object *proto_elem;
     } json = {NULL, NULL, NULL, NULL, NULL};
-
-    const char *stream_name = (stream_type == TCP) ? "tcp" : "udp";
-
+    char stream_names[MAX_STREAM_TYPE][4] = {{"udp"}, {"eth"}, {"tcp"}};
+    void *stream_contexes[MAX_STREAM_TYPE] = {0};
+    size_t ctx_sizes[MAX_STREAM_TYPE] = {sizeof(transportctx_t), sizeof(ethctx_t), sizeof(transportctx_t)};
+    int (*get_ctx_fn[MAX_STREAM_TYPE])(json_object *, void *) = {json_get_tcp_udp_info, json_get_eth_info, json_get_tcp_udp_info};
 
     debugf("[JSON] Enter");
+    infof("[JSON] Reading config for %s stream.", stream_names[stream_type]);
 
     if (!stream_size) {
         errorf("[JSON] null stream_size");
@@ -59,20 +126,20 @@ static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_typ
     }
 
     streams_len = json_object_array_length(json.streams);
-    errorf("[TCP] streams len = %u", streams_len);
+    errorf("[%s] streams len = %u", stream_names[stream_type], streams_len);
 
     for (int i = 0; i < streams_len; ++i) {
         
         json.stream_elem = json_object_array_get_idx(json.streams, (size_t)i);
 
-        json.proto = json_object_object_get(json.stream_elem, stream_name);
+        json.proto = json_object_object_get(json.stream_elem, stream_names[stream_type]);
         if (!json.proto) {
             errorf("[JSON] proto field cannot be found");
             continue;
         }
 
         cfg->cfg_size = json_object_array_length(json.proto);
-        errorf("[proto] stram len = %u", cfg->cfg_size);
+        errorf("proto: %s, stram len = %u", stream_names[stream_type], cfg->cfg_size);
 
         if (!cfg->cfg_size) {
             cfg->streams = NULL;
@@ -96,27 +163,13 @@ static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_typ
             }
             memcpy(cfg->streams[j].data, data, strlen(data));
 
-            transportctx_t *protoctx = calloc(1, sizeof(transportctx_t)); // udp or tcp does not matter since the structure is the same.
-            if (!protoctx) {
+            stream_contexes[stream_type] = calloc(1, ctx_sizes[stream_type]);
+            if (!stream_contexes[stream_type]) {
                 errorf("[JSON] mem allocation failed");
                 goto bail;
             }
 
-            const char *ip = json_object_get_string(json_object_object_get(json.proto_elem, "ip"));
-            if (!ip) {
-                errorf("[JSON] get stream IP failed");
-                goto bail;
-            }
-            infof("iplen: %lu, ip=%s\n", strlen(ip), ip);
-            memcpy(protoctx->ip, ip, strlen(ip));
-            infof("protoctx->ipiplen: %lu, protoctx->ipip=%s\n", strlen(protoctx->ip), protoctx->ip);
-
-            const char *port = json_object_get_string(json_object_object_get(json.proto_elem, "port"));
-            if (!port) {
-                errorf("[JSON] get stream port failed");
-                goto bail;
-            }
-            protoctx->port = atoi(port);
+            get_ctx_fn[stream_type](json.proto_elem, stream_contexes[stream_type]);
 
             const char *count = json_object_get_string(json_object_object_get(json.proto_elem, "count"));
             cfg->streams[j].count = (!count) ? COUNT_DEFAULT : atoi(count);
@@ -124,7 +177,8 @@ static int json_get_tcp_udp_stream(const char *filename, streamtype_e stream_typ
             const char *interval_ms = json_object_get_string(json_object_object_get(json.proto_elem, "interval_ms"));
             cfg->streams[j].interval_ms = (!interval_ms) ? INTERVAL_MS_DEFAULT: atoi(interval_ms);
 
-            cfg->streams[j].stream_ctx = protoctx;
+            cfg->streams[j].stream_ctx = stream_contexes[stream_type];
+            dump_cfg(&cfg->streams[j]);
         }
     }
 
@@ -142,18 +196,6 @@ bail:
 
     debugf("[JSON] Returning ret: %d", ret);
     return ret;
-}
-
-static int json_get_stream(const char *filename, streamtype_e stream_type, config_t *cfg, int *stream_size)
-{
-    switch(stream_type)
-    {
-        case TCP:   return json_get_tcp_udp_stream(filename, TCP, cfg, stream_size);
-        case UDP:   return json_get_tcp_udp_stream(filename, UDP, cfg, stream_size);
-        default:    return json_get_tcp_udp_stream(filename, TCP, cfg, stream_size);
-    }
-
-    return 0;
 }
 
 config_worker_t json_worker = {

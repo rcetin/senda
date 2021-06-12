@@ -197,7 +197,8 @@ int tcp_send(void *priv, uint8_t *data, uint32_t len)
 	si.sin_family = AF_INET;
 	si.sin_port = htons(tcpx->port);
 
-    ret = sendto(sockfd, data, len, 0, (struct sockaddr *) &si, sizeof(si));
+    ret = write(sockfd, data, len);
+    // ret = sendto(sockfd, data, len, 0, (struct sockaddr *) &si, sizeof(si));
     if (ret == -1) {
         if (errno == EPIPE && !CHECK_BIT(private->flags, TCP_FLAGS_BROKEN_PIPE)) {
             debugf("[TCP] Setting TCP Broken Pipe flag");

@@ -46,12 +46,10 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
         return NULL;
     }
 
-    len = strlen(str);
+    len = (strlen(str) % 2) ? (strlen(str) / 2) + 1 : (strlen(str) / 2);
     if (len <= 0) {
         return NULL;
     }
-    len /= 2;
-    len++;
 
     errorf("calloc len: %d", len);
     elem = (uint8_t *)calloc(1, len);

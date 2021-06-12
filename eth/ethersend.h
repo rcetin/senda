@@ -1,6 +1,8 @@
 #ifndef _ETHERSEND_H
 #define _ETHERSEND_H
 
+#include <net/if.h>
+
 struct sender ethsender;
 
 typedef struct ethctx {

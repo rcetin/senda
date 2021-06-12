@@ -9,7 +9,7 @@
 #endif
 
 #ifndef ETHER_STR
-#define ETHER_STR   "%x:%x:%x:%x:%x:%x"
+#define ETHER_STR   "%02x:%02x:%02x:%02x:%02x:%02x"
 #endif
 
 #ifndef ETHER_ADDR
@@ -52,6 +52,7 @@
 #define USEC (1000 * MSEC)
 #define INTERVAL_MS_DEFAULT 1000
 #define COUNT_DEFAULT       0
+#define MAX_MTU (65536 - 117)
 
 typedef enum {
     ARP,
