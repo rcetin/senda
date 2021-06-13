@@ -28,6 +28,7 @@ typedef struct single_mode_cfg {
     uint32_t count;
     void *ctx;
     void *sender_handle;
+    struct cfg_node *node;
 } single_mode_cfg_t;
 
 struct cfg_node {
@@ -128,6 +129,7 @@ static void sigint_handler(int sig)
 
         sender_handle = cnode->cfg->sender_handle;
         sender_dispatcher[cnode->cfg->protocol].worker->destroy(sender_handle);
+        errorf("signal handler sender_handle: %p", sender_handle);
     }
 
     cleanup_main_thread();
@@ -177,12 +179,13 @@ static void *single_mode_run(void *arg)
     cfg->sender_handle = sender_handle;
     uint32_t sleep_duration = (cfg->interval_ms) ? (cfg->interval_ms * MSEC) : 0;
     while (loop || cfg->count--) {
-        infof("[Single Mode] %s", get_localtime());
         sender_dispatcher[cfg->protocol].worker->send(sender_handle, cfg->data, cfg->datalen);
         usleep(sleep_duration);
-        infof("----------------------------------------------");
     }
     sender_dispatcher[cfg->protocol].worker->destroy(sender_handle);
+    errorf("Thread completed: %lu", (unsigned long int)*(cfg->node->thread_data));
+    destroy_single_config(cfg->node);
+    
     ret = 0;
 
 bail:
@@ -250,6 +253,7 @@ static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
     for (int i = 0; i < protocfg->cfg_size; ++i) {
         stream_config_t *stream = &protocfg->streams[i];
         transportctx_t *protoctx = stream->stream_ctx;
+        pthread_attr_t thread_attr;
 
         errorf("tcp cfg nu: %d", i);
 
@@ -277,6 +281,9 @@ static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
             return -1;
         }
 
+        memset(&thread_attr, 0, sizeof thread_attr);
+        pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
+
         if (pthread_create(*thread_data, NULL, single_mode_run, cfg)) {
             errorf("thread create failed");
             return -1;
@@ -288,6 +295,7 @@ static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
             return -1;
         }
 
+        cfg->node = cnode;
         cnode->cfg = cfg;
         cnode->thread_data = *thread_data;
         TAILQ_INSERT_TAIL(&g_configs, cnode, node);
@@ -550,25 +558,25 @@ int main(int argc, char *argv[])
         goto bail;
     }
 
-    // int tcp_stream_size;
-    // config_t tcpcfg;
-    // config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
+    int tcp_stream_size;
+    config_t tcpcfg;
+    config_get_stream(&tcpcfg, TCP, &tcp_stream_size);
 
-    // errorf("TCP cfg size = %d", tcpcfg.cfg_size);
+    errorf("TCP cfg size = %d", tcpcfg.cfg_size);
 
-    // if (create_transport_threads(&tcpcfg, &thread_data)) {
-    //     goto bail;
-    // }
+    if (create_transport_threads(&tcpcfg, &thread_data)) {
+        goto bail;
+    }
 
-    // int udp_stream_size;
-    // config_t udpcfg;
-    // config_get_stream(&udpcfg, UDP, &udp_stream_size);
+    int udp_stream_size;
+    config_t udpcfg;
+    config_get_stream(&udpcfg, UDP, &udp_stream_size);
 
-    // errorf("UDP cfg size = %d", udpcfg.cfg_size);
+    errorf("UDP cfg size = %d", udpcfg.cfg_size);
 
-    // if (create_transport_threads(&udpcfg, &thread_data)) {
-    //     goto bail;
-    // }
+    if (create_transport_threads(&udpcfg, &thread_data)) {
+        goto bail;
+    }
 
     int eth_stream_size;
     config_t ethcfg;
@@ -579,6 +587,8 @@ int main(int argc, char *argv[])
     if (create_transport_threads(&ethcfg, &thread_data)) {
         goto bail;
     }
+
+    
 
     if (join_all_threads()) {
         goto bail;

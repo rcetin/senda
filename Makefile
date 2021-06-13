@@ -4,14 +4,14 @@ OBJ_PATH := ./build/
 
 
 ########################### MAIN ################################
-$(target)_src = main.c \
-				eth/ethersend.c \
+$(target)_src = eth/ethersend.c \
 				debug/debug.c \
 				utils/utils.c \
 				udp/udpsend.c \
 				tcp/tcpsend.c \
 				config/config.c \
-				config/json/json_parser.c
+				config/json/json_parser.c \
+				main.c
 
 $(target)_inc = -I$(shell pwd)
 OBJS := $(patsubst %,$(OBJ_PATH)%,$($(target)_src:.c=.o))
@@ -20,7 +20,6 @@ DEPS := $(patsubst %,$(OBJ_PATH)%,$($(target)_src:.c=.d))
 
 CFLAGS = -std=gnu11 \
 	-g3 \
-	-pedantic \
 	-Wall \
 	-Wextra \
 	-Wfloat-equal \

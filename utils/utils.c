@@ -50,7 +50,7 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
     if (len <= 0) {
         return NULL;
     }
-
+    
     errorf("calloc len: %d", len);
     elem = (uint8_t *)calloc(1, len);
     if (elem == NULL) {

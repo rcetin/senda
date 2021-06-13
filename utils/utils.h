@@ -3,6 +3,7 @@
 
 #include <sys/queue.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #ifndef ETH_ALEN
 #define ETH_ALEN    6

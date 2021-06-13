@@ -35,8 +35,8 @@
 				"data":"AABBCCCSDASDADSASDASD",
 				"ip":"0.0.0.0",
 			  "port": 3333,
-			  "count": 1111,
-			  "interval_ms": 1000,
+			  "count": 10,
+			  "interval_ms": 10,
 			}
 		]
 	},
