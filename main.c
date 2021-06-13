@@ -183,8 +183,8 @@ static void *single_mode_run(void *arg)
         usleep(sleep_duration);
     }
     sender_dispatcher[cfg->protocol].worker->destroy(sender_handle);
+    cfg->sender_handle = NULL;  // prevent double destroy
     errorf("Thread completed: %lu", (unsigned long int)*(cfg->node->thread_data));
-    destroy_single_config(cfg->node);
     
     ret = 0;
 
