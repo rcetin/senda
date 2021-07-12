@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/mman.h>
 
 #include <net/if.h>
 
@@ -24,6 +25,7 @@ typedef struct single_mode_cfg {
     streamtype_e protocol;
     uint8_t *data;
     uint32_t datalen;
+    uint32_t mtu_len;
     uint32_t interval_ms;
     uint32_t count;
     void *ctx;
@@ -43,6 +45,7 @@ static void show_current_opts(void);
 static void destroy_runtime_configs(void);
 static void cleanup_main_thread(void);
 static void destroy_single_config(struct cfg_node *cnode);
+static void speed_test_run(void);
 
 static streamtype_e get_protocol_from_string(const char *str)
 {
@@ -194,6 +197,54 @@ bail:
     return 0;
 }
 
+static int random_fill(FILE *fp, uint32_t size)
+{
+    char c = 'a';
+    char buf[size];
+    size_t written = 0;
+    size_t left = size;
+
+    for (size_t i = 0; i < size; ++i) {
+        buf[i] = c++;
+
+        if (c == 'z') {
+            c = 'a';
+        }
+    }
+
+    while (left) {
+        written = fwrite(buf, 1, left, fp);
+        if (!written) {
+            errorf("write error");
+            return -1;
+        }
+
+        left -= written;
+    }
+
+    return 0;
+}
+
+static void speed_test_run(void)
+{
+    FILE *fp;
+    const uint32_t filesize = 128 * 1024;
+    const char *filename = "/tmp/test.txt";
+    void *mp = NULL;
+
+    fp = fopen(filename, "r+");
+    if (!fp) {
+        errorf("[ST] file creation error");
+        return;
+    }
+
+    random_fill(fp, filesize);
+
+    int fd = fileno(fp);
+
+
+}
+
 static int prepare_eth_ctx(ethctx_t **ctx, char *ifname, uint8_t *dstmac)
 {
     if (!ctx) {
@@ -248,6 +299,13 @@ static int prepare_tcp_ctx(transportctx_t **ctx, char *ip, uint32_t port)
     return 0;
 }
 
+static uint32_t get_stream_mtu(streamtype_e type)
+{
+    if (type == UDP) return MAX_UDP_MTU;
+    else if (type == TCP) return MAX_TCP_MTU;
+    else return MAX_ETH_MTU;
+}
+
 static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
 {
     for (int i = 0; i < protocfg->cfg_size; ++i) {
@@ -267,13 +325,20 @@ static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
 
         cfg->protocol = stream->stream_type;
         cfg->ctx = stream->stream_ctx;
-        cfg->data = str2hex(stream->data, &cfg->datalen);
+        if (stream->convertDataToHex) {
+            cfg->data = str2hex((const char *)stream->data, &cfg->datalen);
+        } else {
+            cfg->data = stream->data;
+            cfg->datalen = strlen((const char *)cfg->data);
+        }
+        
         if (!cfg->data) {
             errorf("Data parsing failed");
             return -1;
         }
         cfg->count = stream->count;
         cfg->interval_ms = stream->interval_ms;
+        cfg->mtu_len = get_stream_mtu(stream->stream_type);
 
         *thread_data = calloc(1, sizeof(*thread_data));
         if (!(*thread_data)) {

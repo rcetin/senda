@@ -10,7 +10,8 @@ typedef enum configtype {
 } configtype_e;
 
 typedef struct stream_config {
-    char data[MAX_DATA_SIZE];
+    uint8_t *data;
+    int convertDataToHex;
     streamtype_e stream_type;
     uint32_t count;
     uint32_t interval_ms;

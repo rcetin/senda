@@ -44,6 +44,54 @@ static int json_get_tcp_udp_info(json_object *object, void *outctx)
     return 0;
 }
 
+static const char *read_data_from_file(const char *filename)
+{
+    int alloc_size = 1024;
+    int remaining = alloc_size;
+    int idx = 0;
+    size_t read;
+
+    char *buffer = calloc(alloc_size, sizeof(char));
+    if (!buffer) {
+        perror("[JSON] alloc failed");
+        return NULL;
+    }
+
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        perror("[JSON] open failed");
+        return NULL;
+    }
+
+    do {
+        read = fread(buffer + idx, 1, remaining, fp);
+        if (!read) {
+            // return buffer;
+            fprintf(stderr, "Read file completed.\n\n");
+            break;
+        }
+
+        remaining -= read;
+        idx += read;
+        if (!remaining) {
+            char *new_buf = realloc(buffer, 2 * alloc_size);
+            if (!new_buf) {
+                perror("[JSON] realloc failed");
+                free(buffer);
+                return NULL;
+            }
+
+            remaining += alloc_size;
+            alloc_size *= 2;
+            fprintf(stderr, "enlarge the buffer, new size=%d\n", alloc_size);
+            buffer = new_buf;
+        }
+    } while(1);
+
+    return buffer;
+    
+}
+
 static int json_get_eth_info(json_object *object, void *outctx)
 {
     ethctx_t *ctx = NULL;
@@ -161,6 +209,18 @@ static int json_get_stream(const char *filename, streamtype_e stream_type, confi
                 errorf("[JSON] get stream data failed");
                 goto bail;
             }
+            if (!strncmp(data, "/", 1)) {
+                // read from path
+                data = read_data_from_file(data);
+            } else {
+                cfg->streams[j].convertDataToHex = 1;
+            }
+
+            cfg->streams[j].data = calloc(strlen(data) + 1, sizeof(char));
+            if (!cfg->streams[j].data) {
+                errorf("[JSON] alloc failed");
+                goto bail;
+            }
             memcpy(cfg->streams[j].data, data, strlen(data));
 
             stream_contexes[stream_type] = calloc(1, ctx_sizes[stream_type]);
@@ -178,7 +238,7 @@ static int json_get_stream(const char *filename, streamtype_e stream_type, confi
             cfg->streams[j].interval_ms = (!interval_ms) ? INTERVAL_MS_DEFAULT: atoi(interval_ms);
 
             cfg->streams[j].stream_ctx = stream_contexes[stream_type];
-            dump_cfg(&cfg->streams[j]);
+            // dump_cfg(&cfg->streams[j]);
         }
     }
 

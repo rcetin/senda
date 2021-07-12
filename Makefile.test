@@ -1,5 +1,6 @@
 test1 = test/test_tailq
 test2 = test/test_tcp
+test3 = test/test_read_from_file
 
 red=\e[31m
 normal=\e[0m
@@ -19,7 +20,8 @@ $(test1): $($(test1)_OBJS)
 ###########################################################
 
 ########################## TEST2 #################################
-$(test2)_src = test/tcp/tcp.c
+$(test2)_src = test/all_tests/all_tests.c \
+				test/all_tests/read_from_file.c
 $(test2)_inc = -I$(shell pwd)
 $(test2)_OBJS := $(patsubst %,$(OBJ_PATH)%,$($(test2)_src:.c=.o))
 $(test2)_DEPS := $(patsubst %,$(OBJ_PATH)%,$($(test2)_src:.c=.d))
@@ -48,10 +50,10 @@ define run-test
 endef
 
 post-test:
-	$(info [Generate] $(test1) $(test2).)
+	$(info [Generate] $(test1) $(test2))
 	@echo "Done."
 	@echo "Running tests..."
 	$(call run-test,$(test1))
 	$(call run-test,$(test2))
 
--include $($(test1)_DEPS) $($(test2)_DEPS)
+-include $($(test1)_DEPS) $($(test2)_DEPS) $($(test3)_DEPS)

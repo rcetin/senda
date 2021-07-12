@@ -12,7 +12,7 @@ typedef struct ethctx {
 } ethctx_t;
 
 void *eth_create(void *ctx);
-int eth_send(void *priv, uint8_t *data, uint32_t len);
+int eth_send(void *priv, const uint8_t *data, uint32_t len);
 void eth_destroy(void *priv);
 
 #endif

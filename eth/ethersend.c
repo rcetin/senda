@@ -50,7 +50,7 @@ void *eth_create(void *ctx)
     return private;
 }
 
-int eth_send(void *priv, uint8_t *data, uint32_t len)
+int eth_send(void *priv, const uint8_t *data, uint32_t len)
 {
     eth_priv *private = priv;
     int sockfd = private->handle;

@@ -53,7 +53,9 @@
 #define USEC (1000 * MSEC)
 #define INTERVAL_MS_DEFAULT 1000
 #define COUNT_DEFAULT       0
-#define MAX_MTU (65536 - 117)
+#define MAX_TCP_MTU (65535)
+#define MAX_UDP_MTU (1460)
+#define MAX_ETH_MTU (1500)
 
 typedef enum {
     ARP,
@@ -66,7 +68,7 @@ typedef struct transportctx {
 
 struct ifreq;
 
-uint8_t *str2hex(char*, uint32_t*);
+uint8_t *str2hex(const char *str, uint32_t *datalen);
 int str2mac(const char*, uint8_t*);
 int mac2str(const uint8_t*, char*);
 unsigned int packet2proto(packet_t);

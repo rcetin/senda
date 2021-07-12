@@ -178,7 +178,7 @@ static int tcp_handle_brokenpipe(void *priv)
     return 0;
 }
 
-int tcp_send(void *priv, uint8_t *data, uint32_t len)
+int tcp_send(void *priv, const uint8_t *data, uint32_t len)
 {
     tcp_priv_t *private = priv;
     int sockfd = private->handle;

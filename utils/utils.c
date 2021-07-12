@@ -36,7 +36,7 @@ int mac2str(const uint8_t* mac, char *buf)
     return 0;
 }
 
-uint8_t *str2hex(char *str, uint32_t *datalen)
+uint8_t *str2hex(const char *str, uint32_t *datalen)
 {
     uint32_t len;
     uint8_t *elem;
@@ -51,18 +51,18 @@ uint8_t *str2hex(char *str, uint32_t *datalen)
         return NULL;
     }
     
-    errorf("calloc len: %d", len);
+    debugf("calloc len: %d", len);
     elem = (uint8_t *)calloc(1, len);
     if (elem == NULL) {
         errorf("failed to allocate\n");
         return NULL;
     }
 
-    errorf("Data: %s", str);
+    debugf("Data: %s", str);
     for (uint32_t i = 0; i < len; ++i, str += 2) {
         sscanf(str, "%02x", &tmp);
         elem[i] = tmp;
-        errorf("%p->%d:%02x", (void *)&elem[i], i, elem[i]);
+        debugf("%p->%d:%02x", (void *)&elem[i], i, elem[i]);
     }
         
     *datalen = len;

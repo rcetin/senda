@@ -11,3 +11,5 @@
 ## other
 .vscode/*
 .build/*
+
+*.txt

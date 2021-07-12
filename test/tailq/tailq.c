@@ -21,6 +21,5 @@ int main(void)
         printf(" %d", p->datum);
     }
 
-
     return 0;
 }

@@ -47,7 +47,7 @@ void *udp_create(void *ctx)
     return private;
 }
 
-int udp_send(void *priv, uint8_t *data, uint32_t len)
+int udp_send(void *priv, const uint8_t *data, uint32_t len)
 {
     udp_priv_t *private = priv;
     int sockfd = private->handle;

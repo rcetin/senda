@@ -42,7 +42,8 @@ CFLAGS = -std=gnu11 \
 	-Wno-unused
 
 LDFLAGS = -ljson-c \
-			-lpthread
+			-lpthread \
+			-lcmocka
 
 all: start $(target) post-target
 
