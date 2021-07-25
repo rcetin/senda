@@ -11,7 +11,8 @@ typedef enum configtype {
 
 typedef struct stream_config {
     uint8_t *data;
-    int convertDataToHex;
+    size_t datalen;
+    uint8_t mapped;
     streamtype_e stream_type;
     uint32_t count;
     uint32_t interval_ms;

@@ -17,7 +17,7 @@ static void test_readfromfile(void **state)
 	const char *filename = "/home/rcetin/workspace/repos/senda/test/read_from_file.txt";
 
 	const char *buf = read_data_from_file(filename);
-	printf("buffer=%p\n\n", buf);
+	// printf("buffer=%p\n\n", buf);
 
 	assert_non_null(buf);
 }

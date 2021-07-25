@@ -7,7 +7,7 @@
 				"data":"/home/rcetin/workspace/repos/senda/test/read_from_file.txt",
 				"ip":"0.0.0.0",
 			  "port": 1111,
-			  "count": 0,
+			  "count": 3,
 			  "interval_ms": 0,
 			}
 		]

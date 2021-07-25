@@ -25,6 +25,7 @@ typedef struct single_mode_cfg {
     streamtype_e protocol;
     uint8_t *data;
     uint32_t datalen;
+    uint8_t mapped;
     uint32_t mtu_len;
     uint32_t interval_ms;
     uint32_t count;
@@ -325,11 +326,13 @@ static int create_transport_threads(config_t *protocfg, pthread_t **thread_data)
 
         cfg->protocol = stream->stream_type;
         cfg->ctx = stream->stream_ctx;
-        if (stream->convertDataToHex) {
+        if (!stream->mapped) {
             cfg->data = str2hex((const char *)stream->data, &cfg->datalen);
+            cfg->mapped = 0;
         } else {
             cfg->data = stream->data;
-            cfg->datalen = strlen((const char *)cfg->data);
+            cfg->datalen = stream->datalen;
+            cfg->mapped = 1;
         }
         
         if (!cfg->data) {
@@ -386,7 +389,12 @@ static void cleanup_runtime_config(single_mode_cfg_t *cfg)
         return;
     }
 
-    SFREE(cfg->data);
+    if (cfg->mapped) {
+        munmap(cfg->data, cfg->datalen);
+    } else {
+        SFREE(cfg->data);
+    }
+    
     SFREE(cfg->ctx);
 }
 
